@@ -3,7 +3,7 @@ import * as http from "node:http";
 import { resolve, join } from "node:path";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { MockOpenAI } from "../mock-openai.js";
+import { LLMock } from "../llmock.js";
 import { Journal } from "../journal.js";
 
 // ---- Helpers ----
@@ -46,13 +46,13 @@ function chatBody(userMessage: string, stream = true) {
 }
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), "mock-openai-test-"));
+  return mkdtempSync(join(tmpdir(), "llmock-test-"));
 }
 
 // ---- Tests ----
 
-describe("MockOpenAI", () => {
-  let mock: MockOpenAI | null = null;
+describe("LLMock", () => {
+  let mock: LLMock | null = null;
 
   afterEach(async () => {
     if (mock) {
@@ -70,23 +70,23 @@ describe("MockOpenAI", () => {
 
   describe("constructor", () => {
     it("creates an instance with default options", () => {
-      mock = new MockOpenAI();
-      expect(mock).toBeInstanceOf(MockOpenAI);
+      mock = new LLMock();
+      expect(mock).toBeInstanceOf(LLMock);
     });
 
     it("accepts custom options", () => {
-      mock = new MockOpenAI({
+      mock = new LLMock({
         port: 0,
         host: "127.0.0.1",
         latency: 50,
       });
-      expect(mock).toBeInstanceOf(MockOpenAI);
+      expect(mock).toBeInstanceOf(LLMock);
     });
   });
 
   describe("fixture management", () => {
     it("addFixture adds a fixture and returns this", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       const result = mock.addFixture({
         match: { userMessage: "hello" },
         response: { content: "Hi!" },
@@ -95,7 +95,7 @@ describe("MockOpenAI", () => {
     });
 
     it("addFixtures adds multiple fixtures and returns this", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       const result = mock.addFixtures([
         {
           match: { userMessage: "a" },
@@ -110,7 +110,7 @@ describe("MockOpenAI", () => {
     });
 
     it("chaining API works across multiple calls", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       const result = mock
         .addFixture({
           match: { userMessage: "hello" },
@@ -126,7 +126,7 @@ describe("MockOpenAI", () => {
     });
 
     it("clearFixtures empties all fixtures and returns this", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.addFixture({
         match: { userMessage: "hello" },
         response: { content: "Hi!" },
@@ -142,7 +142,7 @@ describe("MockOpenAI", () => {
     });
 
     it("on() shorthand adds a fixture", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.on({ userMessage: "on-test" }, { content: "on response" });
 
       await mock.start();
@@ -152,7 +152,7 @@ describe("MockOpenAI", () => {
     });
 
     it("on() shorthand passes latency and chunkSize opts", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.on({ userMessage: "opts-test" }, { content: "response" }, { latency: 0, chunkSize: 5 });
 
       await mock.start();
@@ -163,7 +163,7 @@ describe("MockOpenAI", () => {
 
   describe("loadFixtureFile", () => {
     it("loads fixtures from a JSON file", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.loadFixtureFile(join(FIXTURES_DIR, "example-greeting.json"));
 
       await mock.start();
@@ -173,7 +173,7 @@ describe("MockOpenAI", () => {
     });
 
     it("returns this for chaining", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       const result = mock.loadFixtureFile(join(FIXTURES_DIR, "example-greeting.json"));
       expect(result).toBe(mock);
     });
@@ -181,7 +181,7 @@ describe("MockOpenAI", () => {
 
   describe("loadFixtureDir", () => {
     it("loads all JSON fixtures from a directory", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.loadFixtureDir(FIXTURES_DIR);
 
       await mock.start();
@@ -193,7 +193,7 @@ describe("MockOpenAI", () => {
     });
 
     it("returns this for chaining", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       const result = mock.loadFixtureDir(FIXTURES_DIR);
       expect(result).toBe(mock);
     });
@@ -213,7 +213,7 @@ describe("MockOpenAI", () => {
           }),
         );
 
-        mock = new MockOpenAI();
+        mock = new LLMock();
         mock.loadFixtureDir(tmpDir);
 
         await mock.start();
@@ -228,7 +228,7 @@ describe("MockOpenAI", () => {
 
   describe("server lifecycle", () => {
     it("start returns a URL", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.addFixture({
         match: { userMessage: "hello" },
         response: { content: "Hi!" },
@@ -239,13 +239,13 @@ describe("MockOpenAI", () => {
     });
 
     it("start throws if server already started", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
       await expect(mock.start()).rejects.toThrow("Server already started");
     });
 
     it("stop closes the server", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.addFixture({
         match: { userMessage: "hello" },
         response: { content: "Hi!" },
@@ -261,12 +261,12 @@ describe("MockOpenAI", () => {
     });
 
     it("stop throws if server not started", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await expect(mock.stop()).rejects.toThrow("Server not started");
     });
 
     it("stop rejects when server.close() errors", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
 
       // Access the underlying http.Server via the private serverInstance field
@@ -290,7 +290,7 @@ describe("MockOpenAI", () => {
     });
 
     it("can restart after stop", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.addFixture({
         match: { userMessage: "hello" },
         response: { content: "Hi!" },
@@ -300,7 +300,7 @@ describe("MockOpenAI", () => {
       await mock.stop();
       mock = null; // clear for safety
 
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.addFixture({
         match: { userMessage: "hello" },
         response: { content: "Hi again!" },
@@ -315,12 +315,12 @@ describe("MockOpenAI", () => {
 
   describe("url getter", () => {
     it("throws before server is started", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(() => mock!.url).toThrow("Server not started");
     });
 
     it("returns url after server is started", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
       expect(mock.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     });
@@ -328,18 +328,18 @@ describe("MockOpenAI", () => {
 
   describe("journal getter", () => {
     it("throws before server is started", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(() => mock!.journal).toThrow("Server not started");
     });
 
     it("returns a Journal instance after start", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
       expect(mock.journal).toBeInstanceOf(Journal);
     });
 
     it("journal records requests", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.addFixture({
         match: { userMessage: "journal-test" },
         response: { content: "recorded" },
@@ -357,7 +357,7 @@ describe("MockOpenAI", () => {
 
   describe("request handling", () => {
     it("serves a streaming text response", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.addFixture({
         match: { userMessage: "stream" },
         response: { content: "streamed content" },
@@ -371,7 +371,7 @@ describe("MockOpenAI", () => {
     });
 
     it("returns 404 when no fixture matches", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.addFixture({
         match: { userMessage: "hello" },
         response: { content: "Hi!" },
@@ -383,7 +383,7 @@ describe("MockOpenAI", () => {
     });
 
     it("fixtures added after start are visible", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
 
       // No fixtures yet — should 404
@@ -405,7 +405,7 @@ describe("MockOpenAI", () => {
 
   describe("onMessage convenience", () => {
     it("registers a fixture matching a string userMessage", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("greet", { content: "Hi!" });
       await mock.start();
 
@@ -415,7 +415,7 @@ describe("MockOpenAI", () => {
     });
 
     it("registers a fixture matching a regex userMessage", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage(/hel+o/, { content: "Matched!" });
       await mock.start();
 
@@ -425,14 +425,14 @@ describe("MockOpenAI", () => {
     });
 
     it("returns this for chaining", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(mock.onMessage("x", { content: "y" })).toBe(mock);
     });
   });
 
   describe("onToolCall convenience", () => {
     it("registers a fixture matching a tool name", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onToolCall("get_weather", { content: "sunny" });
       await mock.start();
 
@@ -451,25 +451,25 @@ describe("MockOpenAI", () => {
       });
       // The fixture match for toolName is checked against the last assistant message's tool_calls
       // This may or may not match depending on router logic, but the fixture should be registered
-      expect(mock).toBeInstanceOf(MockOpenAI);
+      expect(mock).toBeInstanceOf(LLMock);
     });
 
     it("returns this for chaining", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(mock.onToolCall("fn", { content: "r" })).toBe(mock);
     });
   });
 
   describe("onToolResult convenience", () => {
     it("returns this for chaining", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(mock.onToolResult("call_123", { content: "r" })).toBe(mock);
     });
   });
 
   describe("nextRequestError", () => {
     it("returns an error on the next request then removes itself", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hello", { content: "Hi!" });
       await mock.start();
 
@@ -488,7 +488,7 @@ describe("MockOpenAI", () => {
     });
 
     it("uses default error message when none provided", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hello", { content: "Hi!" });
       await mock.start();
 
@@ -501,12 +501,12 @@ describe("MockOpenAI", () => {
     });
 
     it("returns this for chaining", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(mock.nextRequestError(500)).toBe(mock);
     });
 
     it("stacks multiple one-shot errors (last pushed fires first)", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hello", { content: "Normal response" });
       await mock.start();
 
@@ -535,7 +535,7 @@ describe("MockOpenAI", () => {
 
   describe("journal proxies", () => {
     it("getRequests returns journal entries", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hi", { content: "Hello" });
       await mock.start();
 
@@ -547,7 +547,7 @@ describe("MockOpenAI", () => {
     });
 
     it("getLastRequest returns last entry", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("a", { content: "A" });
       mock.onMessage("b", { content: "B" });
       await mock.start();
@@ -561,13 +561,13 @@ describe("MockOpenAI", () => {
     });
 
     it("getLastRequest returns null when no requests", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
       expect(mock.getLastRequest()).toBeNull();
     });
 
     it("clearRequests empties the journal", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hi", { content: "Hello" });
       await mock.start();
 
@@ -579,14 +579,14 @@ describe("MockOpenAI", () => {
     });
 
     it("getRequests throws when server not started", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(() => mock!.getRequests()).toThrow("Server not started");
     });
   });
 
   describe("reset", () => {
     it("clears fixtures and journal", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hi", { content: "Hello" });
       await mock.start();
 
@@ -602,19 +602,19 @@ describe("MockOpenAI", () => {
     });
 
     it("returns this for chaining", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
       expect(mock.reset()).toBe(mock);
     });
 
     it("works even before server starts (just clears fixtures)", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hi", { content: "Hello" });
       expect(mock.reset()).toBe(mock);
     });
 
     it("is idempotent — calling reset() twice causes no error", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hi", { content: "Hello" });
       await mock.start();
 
@@ -636,7 +636,7 @@ describe("MockOpenAI", () => {
     });
 
     it("after reset, only newly added fixtures are active", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("old", { content: "Old response" });
       mock.onMessage("new", { content: "New response" });
       await mock.start();
@@ -661,7 +661,7 @@ describe("MockOpenAI", () => {
     });
 
     it("clearFixtures works before server is started", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       mock.onMessage("hi", { content: "Hello" });
       // clearFixtures alone should not throw before start
       expect(mock.clearFixtures()).toBe(mock);
@@ -670,47 +670,47 @@ describe("MockOpenAI", () => {
 
   describe("baseUrl getter", () => {
     it("returns same value as url", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
       expect(mock.baseUrl).toBe(mock.url);
     });
 
     it("throws before server is started", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(() => mock!.baseUrl).toThrow("Server not started");
     });
   });
 
   describe("port getter", () => {
     it("returns a number", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
       expect(typeof mock.port).toBe("number");
       expect(mock.port).toBeGreaterThan(0);
     });
 
     it("matches the port in the URL", async () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       await mock.start();
       const urlPort = parseInt(new URL(mock.url).port, 10);
       expect(mock.port).toBe(urlPort);
     });
 
     it("throws before server is started", () => {
-      mock = new MockOpenAI();
+      mock = new LLMock();
       expect(() => mock!.port).toThrow("Server not started");
     });
   });
 
   describe("static create()", () => {
     it("creates and starts a server", async () => {
-      mock = await MockOpenAI.create();
+      mock = await LLMock.create();
       expect(mock.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       expect(mock.journal).toBeInstanceOf(Journal);
     });
 
     it("accepts options", async () => {
-      mock = await MockOpenAI.create({
+      mock = await LLMock.create({
         host: "127.0.0.1",
         port: 0,
       });
@@ -718,7 +718,7 @@ describe("MockOpenAI", () => {
     });
 
     it("allows adding fixtures after creation", async () => {
-      mock = await MockOpenAI.create();
+      mock = await LLMock.create();
       mock.addFixture({
         match: { userMessage: "factory-test" },
         response: { content: "factory response" },

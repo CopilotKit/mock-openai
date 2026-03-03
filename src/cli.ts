@@ -6,7 +6,7 @@ import { createServer } from "./server.js";
 import { loadFixtureFile, loadFixturesFromDir } from "./fixture-loader.js";
 
 const HELP = `
-Usage: mock-openai [options]
+Usage: llmock [options]
 
 Options:
   -p, --port <number>      Port to listen on (default: 4010)
@@ -79,7 +79,7 @@ async function main() {
     chunkSize,
   });
 
-  console.log(`Mock OpenAI server listening on ${instance.url}`);
+  console.log(`llmock server listening on ${instance.url}`);
 
   function shutdown() {
     console.log("\nShutting down...");

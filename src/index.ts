@@ -1,5 +1,5 @@
 // Main class
-export { MockOpenAI } from "./mock-openai.js";
+export { LLMock } from "./llmock.js";
 
 // Server
 export { createServer, type ServerInstance } from "./server.js";
@@ -13,8 +13,20 @@ export { Journal } from "./journal.js";
 // Router
 export { matchFixture } from "./router.js";
 
+// Provider handlers
+export { handleResponses } from "./responses.js";
+export { handleMessages } from "./messages.js";
+export { handleGemini } from "./gemini.js";
+
 // Helpers
-export { generateId, generateToolCallId, buildTextChunks, buildToolCallChunks } from "./helpers.js";
+export {
+  generateId,
+  generateToolCallId,
+  generateMessageId,
+  generateToolUseId,
+  buildTextChunks,
+  buildToolCallChunks,
+} from "./helpers.js";
 
 // SSE
 export { writeSSEStream, writeErrorResponse } from "./sse-writer.js";

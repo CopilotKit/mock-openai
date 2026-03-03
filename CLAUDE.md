@@ -1,4 +1,4 @@
-# mock-openai
+# llmock
 
 ## Before Every Commit
 
