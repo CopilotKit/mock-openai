@@ -3,7 +3,7 @@ import http from "node:http";
 import { resolve } from "node:path";
 import { createServer, type ServerInstance } from "../server.js";
 import { loadFixturesFromDir } from "../fixture-loader.js";
-import { MockOpenAI } from "../mock-openai.js";
+import { LLMock } from "../llmock.js";
 import type { Fixture, SSEChunk, ChatCompletionRequest } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -476,7 +476,7 @@ describe("integration: server options", () => {
 });
 
 describe("integration: onToolResult", () => {
-  let mock: MockOpenAI | null = null;
+  let mock: LLMock | null = null;
 
   afterEach(async () => {
     if (mock) {
@@ -492,7 +492,7 @@ describe("integration: onToolResult", () => {
   });
 
   it("matches a tool result message and streams the expected response", async () => {
-    mock = new MockOpenAI();
+    mock = new LLMock();
     mock.onToolResult("call_abc", { content: "result text" });
     await mock.start();
 
@@ -545,6 +545,47 @@ describe("integration: onToolResult", () => {
     expect(entries[0].response.status).toBe(200);
     expect(entries[0].response.fixture).not.toBeNull();
     expect(entries[0].response.fixture!.match.toolCallId).toBe("call_abc");
+  });
+});
+
+describe("integration: cross-provider fixture sharing", () => {
+  it("same fixture works across all 4 endpoints", async () => {
+    const fixtures: Fixture[] = [
+      {
+        match: { userMessage: "hello" },
+        response: { content: "Hello from fixture!" },
+      },
+    ];
+
+    instance = await createServer(fixtures, { port: 0, chunkSize: 100 });
+
+    // OpenAI Chat Completions
+    const r1 = await httpPost(`${instance.url}/v1/chat/completions`, chatRequest("hello"));
+    expect(r1.status).toBe(200);
+
+    // OpenAI Responses API
+    const r2 = await httpPost(`${instance.url}/v1/responses`, {
+      model: "gpt-4",
+      input: [{ role: "user", content: "hello" }],
+    });
+    expect(r2.status).toBe(200);
+
+    // Anthropic Claude Messages API
+    const r3 = await httpPost(`${instance.url}/v1/messages`, {
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: "hello" }],
+    });
+    expect(r3.status).toBe(200);
+
+    // Google Gemini generateContent
+    const r4 = await httpPost(`${instance.url}/v1beta/models/gemini-2.0-flash:generateContent`, {
+      contents: [{ role: "user", parts: [{ text: "hello" }] }],
+    });
+    expect(r4.status).toBe(200);
+
+    // Journal should have 4 entries
+    expect(instance.journal.size).toBe(4);
   });
 });
 

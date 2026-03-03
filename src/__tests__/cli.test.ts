@@ -94,7 +94,7 @@ function writeFixture(dir: string, name: string): string {
 describe.skipIf(!CLI_AVAILABLE)("CLI: --help", () => {
   it("prints usage text and exits with code 0", async () => {
     const { stdout, code } = await runCli(["--help"]);
-    expect(stdout).toContain("Usage: mock-openai");
+    expect(stdout).toContain("Usage: llmock");
     expect(stdout).toContain("--port");
     expect(stdout).toContain("--fixtures");
     expect(code).toBe(0);

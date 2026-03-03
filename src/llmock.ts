@@ -3,7 +3,7 @@ import { createServer, type ServerInstance } from "./server.js";
 import { loadFixtureFile, loadFixturesFromDir } from "./fixture-loader.js";
 import { Journal } from "./journal.js";
 
-export class MockOpenAI {
+export class LLMock {
   private fixtures: Fixture[] = [];
   private serverInstance: ServerInstance | null = null;
   private options: MockServerOptions;
@@ -194,8 +194,8 @@ export class MockOpenAI {
 
   // ---- Static factory ----
 
-  static async create(options?: MockServerOptions): Promise<MockOpenAI> {
-    const instance = new MockOpenAI(options);
+  static async create(options?: MockServerOptions): Promise<LLMock> {
+    const instance = new LLMock(options);
     await instance.start();
     return instance;
   }
