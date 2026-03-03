@@ -1,0 +1,55 @@
+{
+  "name": "@copilotkit/mock-openai",
+  "version": "0.0.0",
+  "description": "Deterministic mock OpenAI server for testing",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "mock-openai": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "fixtures"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "test:exports": "publint && attw --pack .",
+    "lint": "eslint .",
+    "format:check": "prettier --check .",
+    "release": "pnpm build && changeset publish"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.17.3",
+    "@changesets/cli": "^2.29.4",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.0",
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.6.2",
+    "publint": "^0.3.12",
+    "tsdown": "^0.12.5",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.35.1",
+    "vitest": "^3.2.1"
+  }
+}
