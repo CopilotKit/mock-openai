@@ -1,0 +1,1466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mock-openai — Deterministic OpenAI mock server for testing</title>
+    <meta
+      name="description"
+      content="Real HTTP server. Real SSE streams. Fixture-driven. Zero dependencies. Drop-in replacement for OpenAI in your test suite."
+    />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* ─── Reset & Variables ───────────────────────────────────────── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg-deep: #0a0a0f;
+        --bg-surface: #111118;
+        --bg-card: #16161f;
+        --bg-card-hover: #1c1c28;
+        --border: #2a2a3a;
+        --border-bright: #3a3a50;
+        --text-primary: #e8e8f0;
+        --text-secondary: #8888a0;
+        --text-dim: #555570;
+        --accent: #00ff88;
+        --accent-dim: #00cc6a;
+        --accent-glow: rgba(0, 255, 136, 0.15);
+        --accent-glow-strong: rgba(0, 255, 136, 0.3);
+        --warning: #ffaa00;
+        --error: #ff4466;
+        --blue: #4488ff;
+        --purple: #aa66ff;
+        --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+        --font-sans: "Instrument Sans", -apple-system, system-ui, sans-serif;
+        --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      html {
+        font-size: 16px;
+        scroll-behavior: smooth;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      body {
+        font-family: var(--font-sans);
+        background: var(--bg-deep);
+        color: var(--text-primary);
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+
+      /* ─── Noise Overlay ──────────────────────────────────────────── */
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 9999;
+      }
+
+      /* ─── Layout ─────────────────────────────────────────────────── */
+      .container {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0 2rem;
+      }
+
+      /* ─── Nav ────────────────────────────────────────────────────── */
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        padding: 1rem 0;
+        background: rgba(10, 10, 15, 0.85);
+        backdrop-filter: blur(20px) saturate(1.4);
+        -webkit-backdrop-filter: blur(20px) saturate(1.4);
+        border-bottom: 1px solid var(--border);
+      }
+      nav .container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .nav-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-family: var(--font-mono);
+        font-weight: 600;
+        font-size: 1rem;
+        color: var(--text-primary);
+      }
+      .nav-brand .prompt {
+        color: var(--accent);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        list-style: none;
+      }
+      .nav-links a {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--text-primary);
+        text-decoration: none;
+      }
+      .nav-links .gh-link {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
+      }
+      .nav-links .gh-link:hover {
+        border-color: var(--border-bright);
+        background: var(--bg-card);
+      }
+
+      /* ─── Hero ───────────────────────────────────────────────────── */
+      .hero {
+        padding: 10rem 0 6rem;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Gradient orb behind hero */
+      .hero::before {
+        content: "";
+        position: absolute;
+        top: -200px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 800px;
+        height: 600px;
+        background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+        pointer-events: none;
+      }
+
+      .hero .container {
+        position: relative;
+        z-index: 1;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 1rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 100px;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-bottom: 2rem;
+        animation: fadeUp 0.8s var(--ease-out-expo) both;
+      }
+      .hero-badge .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent);
+        animation: pulse 2s infinite;
+      }
+
+      .hero h1 {
+        font-family: var(--font-sans);
+        font-size: clamp(2.5rem, 6vw, 4.5rem);
+        font-weight: 700;
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+        max-width: 780px;
+        animation: fadeUp 0.8s var(--ease-out-expo) 0.1s both;
+      }
+      .hero h1 .highlight {
+        color: var(--accent);
+        position: relative;
+      }
+
+      .hero-sub {
+        font-size: 1.2rem;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin-top: 1.5rem;
+        line-height: 1.7;
+        animation: fadeUp 0.8s var(--ease-out-expo) 0.2s both;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 2.5rem;
+        animation: fadeUp 0.8s var(--ease-out-expo) 0.3s both;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.75rem;
+        border-radius: 8px;
+        font-family: var(--font-mono);
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        cursor: pointer;
+        border: none;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: var(--bg-deep);
+      }
+      .btn-primary:hover {
+        background: #33ffaa;
+        box-shadow: 0 0 30px var(--accent-glow-strong);
+        text-decoration: none;
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+      }
+      .btn-secondary:hover {
+        border-color: var(--border-bright);
+        background: var(--bg-card);
+        text-decoration: none;
+      }
+
+      .hero-install {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding: 0.75rem 1.25rem;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-family: var(--font-mono);
+        font-size: 0.875rem;
+        max-width: max-content;
+        animation: fadeUp 0.8s var(--ease-out-expo) 0.4s both;
+      }
+      .hero-install .dollar {
+        color: var(--accent);
+        user-select: none;
+      }
+      .hero-install code {
+        color: var(--text-secondary);
+      }
+      .hero-install .copy-btn {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        padding: 0.25rem;
+        transition: color 0.2s;
+        font-size: 1rem;
+      }
+      .hero-install .copy-btn:hover {
+        color: var(--accent);
+      }
+
+      /* ─── SSE Stream Animation ───────────────────────────────────── */
+      .demo {
+        margin-top: 4rem;
+        animation: fadeUp 0.8s var(--ease-out-expo) 0.5s both;
+      }
+      .demo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+      }
+      @media (max-width: 900px) {
+        .demo-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .demo-panel {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow:
+          0 20px 60px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+      }
+      .demo-titlebar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1rem;
+        background: var(--bg-card);
+        border-bottom: 1px solid var(--border);
+      }
+      .demo-titlebar .dots {
+        display: flex;
+        gap: 6px;
+      }
+      .demo-titlebar .dots span {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .demo-titlebar .dots span:nth-child(1) {
+        background: #ff5f57;
+      }
+      .demo-titlebar .dots span:nth-child(2) {
+        background: #febc2e;
+      }
+      .demo-titlebar .dots span:nth-child(3) {
+        background: #28c840;
+      }
+      .demo-titlebar .title {
+        flex: 1;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: var(--text-dim);
+      }
+
+      /* Left panel: static fixture code */
+      .demo-fixture pre {
+        padding: 1.25rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.75;
+        overflow-x: auto;
+        color: var(--text-secondary);
+        height: 310px;
+      }
+      .demo-fixture .key {
+        color: var(--blue);
+      }
+      .demo-fixture .str {
+        color: var(--accent);
+      }
+
+      /* Right panel: animated terminal */
+      .demo-term {
+        padding: 1.25rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.75;
+        height: 310px;
+        overflow: hidden;
+      }
+      .demo-term .line {
+        opacity: 0;
+        transform: translateX(-6px);
+        white-space: nowrap;
+      }
+      .demo-term .line.visible {
+        opacity: 1;
+        transform: translateX(0);
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
+      }
+      .demo-term .prompt-sym {
+        color: var(--accent);
+        user-select: none;
+      }
+      .demo-term .cmd {
+        color: var(--text-primary);
+      }
+      .demo-term .info {
+        color: var(--text-dim);
+      }
+      .demo-term .ok {
+        color: var(--accent);
+      }
+      .demo-term .req {
+        color: var(--warning);
+      }
+      .demo-term .match {
+        color: var(--purple);
+      }
+      .demo-term .streamed {
+        color: var(--text-primary);
+      }
+      .demo-term .cursor {
+        display: inline-block;
+        width: 7px;
+        height: 14px;
+        background: var(--accent);
+        animation: blink 1s step-end infinite;
+        vertical-align: text-bottom;
+        margin-left: 1px;
+      }
+
+      /* ─── Sections ───────────────────────────────────────────────── */
+      section {
+        padding: 6rem 0;
+      }
+
+      .section-label {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        color: var(--accent);
+        margin-bottom: 1rem;
+      }
+
+      .section-title {
+        font-size: clamp(1.75rem, 4vw, 2.75rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        max-width: 650px;
+      }
+
+      .section-desc {
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin-top: 1rem;
+        line-height: 1.7;
+      }
+
+      /* ─── Features Grid ──────────────────────────────────────────── */
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-top: 3.5rem;
+      }
+
+      .feature-card {
+        padding: 2rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        transition:
+          border-color 0.3s,
+          transform 0.3s,
+          box-shadow 0.3s;
+      }
+      .feature-card:hover {
+        border-color: var(--border-bright);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+      }
+      .feature-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        font-size: 1.25rem;
+        margin-bottom: 1.25rem;
+        font-family: var(--font-mono);
+        font-weight: 700;
+      }
+      .feature-icon.green {
+        background: rgba(0, 255, 136, 0.1);
+        color: var(--accent);
+        border: 1px solid rgba(0, 255, 136, 0.2);
+      }
+      .feature-icon.blue {
+        background: rgba(68, 136, 255, 0.1);
+        color: var(--blue);
+        border: 1px solid rgba(68, 136, 255, 0.2);
+      }
+      .feature-icon.purple {
+        background: rgba(170, 102, 255, 0.1);
+        color: var(--purple);
+        border: 1px solid rgba(170, 102, 255, 0.2);
+      }
+      .feature-icon.amber {
+        background: rgba(255, 170, 0, 0.1);
+        color: var(--warning);
+        border: 1px solid rgba(255, 170, 0, 0.2);
+      }
+      .feature-icon.red {
+        background: rgba(255, 68, 102, 0.1);
+        color: var(--error);
+        border: 1px solid rgba(255, 68, 102, 0.2);
+      }
+
+      .feature-card h3 {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+      .feature-card p {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        line-height: 1.6;
+      }
+
+      /* ─── Code Examples ──────────────────────────────────────────── */
+      .code-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 3rem;
+        align-items: start;
+        margin-top: 3.5rem;
+      }
+      .code-section .text-side {
+        padding-top: 1rem;
+      }
+      .code-section .text-side h3 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+      }
+      .code-section .text-side p {
+        color: var(--text-secondary);
+        line-height: 1.7;
+        margin-bottom: 1rem;
+      }
+      .code-section .text-side ul {
+        list-style: none;
+        padding: 0;
+      }
+      .code-section .text-side ul li {
+        padding: 0.4rem 0;
+        padding-left: 1.5rem;
+        position: relative;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+      }
+      .code-section .text-side ul li::before {
+        content: "→";
+        position: absolute;
+        left: 0;
+        color: var(--accent);
+        font-family: var(--font-mono);
+      }
+
+      .code-block {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .code-block-header {
+        display: flex;
+        align-items: center;
+        padding: 0.65rem 1rem;
+        background: var(--bg-card);
+        border-bottom: 1px solid var(--border);
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: var(--text-dim);
+      }
+      .code-block-header .lang-tag {
+        margin-left: auto;
+        padding: 0.15rem 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+      }
+      .code-block pre {
+        padding: 1.25rem;
+        overflow-x: auto;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 1.75;
+      }
+      .code-block pre code {
+        color: var(--text-secondary);
+      }
+      .code-block .kw {
+        color: var(--purple);
+      }
+      .code-block .fn {
+        color: var(--blue);
+      }
+      .code-block .str {
+        color: var(--accent);
+      }
+      .code-block .num {
+        color: var(--warning);
+      }
+      .code-block .cm {
+        color: var(--text-dim);
+        font-style: italic;
+      }
+      .code-block .op {
+        color: var(--text-primary);
+      }
+      .code-block .prop {
+        color: var(--error);
+      }
+      .code-block .type {
+        color: var(--warning);
+      }
+
+      /* ─── Comparison Table ───────────────────────────────────────── */
+      .comparison {
+        border-top: 1px solid var(--border);
+      }
+
+      .comparison-table {
+        width: 100%;
+        margin-top: 3rem;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      .comparison-table th {
+        text-align: left;
+        padding: 1rem 1.25rem;
+        font-family: var(--font-mono);
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border-bottom: 2px solid var(--border-bright);
+        color: var(--text-secondary);
+      }
+      .comparison-table th:nth-child(2) {
+        color: var(--accent);
+      }
+      .comparison-table td {
+        padding: 0.85rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-secondary);
+      }
+      .comparison-table td:first-child {
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+      .comparison-table tr:last-child td {
+        border-bottom: none;
+      }
+      .comparison-table .yes {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .comparison-table .no {
+        color: var(--text-dim);
+      }
+      .comparison-table .manual {
+        color: var(--warning);
+        font-size: 0.85rem;
+      }
+
+      /* ─── Architecture Diagram ───────────────────────────────────── */
+      .arch-diagram {
+        margin-top: 3rem;
+        padding: 2.5rem;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 2;
+        overflow-x: auto;
+      }
+      .arch-diagram .process {
+        color: var(--text-primary);
+      }
+      .arch-diagram .arrow {
+        color: var(--text-dim);
+      }
+      .arch-diagram .mock {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .arch-diagram .env {
+        color: var(--warning);
+      }
+      .arch-diagram .dim {
+        color: var(--text-dim);
+      }
+
+      /* ─── Footer ─────────────────────────────────────────────────── */
+      footer {
+        padding: 4rem 0;
+        border-top: 1px solid var(--border);
+      }
+      footer .container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .footer-left {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        color: var(--text-dim);
+      }
+      .footer-left span {
+        color: var(--accent);
+      }
+      .footer-links {
+        display: flex;
+        gap: 2rem;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--text-primary);
+        text-decoration: none;
+      }
+
+      /* ─── Animations ─────────────────────────────────────────────── */
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes sseLine {
+        from {
+          opacity: 0;
+          transform: translateX(-8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 8px var(--accent);
+        }
+        50% {
+          box-shadow:
+            0 0 16px var(--accent),
+            0 0 4px var(--accent);
+        }
+      }
+
+      /* Scroll-triggered fade-in */
+      .reveal {
+        opacity: 0;
+        transform: translateY(30px);
+        transition:
+          opacity 0.7s var(--ease-out-expo),
+          transform 0.7s var(--ease-out-expo);
+      }
+      .reveal.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* ─── Responsive ─────────────────────────────────────────────── */
+      @media (max-width: 900px) {
+        .features-grid {
+          grid-template-columns: 1fr;
+        }
+        .code-section {
+          grid-template-columns: 1fr;
+        }
+        .comparison-table {
+          font-size: 0.8rem;
+        }
+        .comparison-table th,
+        .comparison-table td {
+          padding: 0.65rem 0.75rem;
+        }
+      }
+      @media (max-width: 600px) {
+        .hero {
+          padding: 8rem 0 4rem;
+        }
+        .hero h1 {
+          font-size: 2rem;
+        }
+        .nav-links {
+          gap: 1rem;
+        }
+        .nav-links a:not(.gh-link) {
+          display: none;
+        }
+        footer .container {
+          flex-direction: column;
+          gap: 1.5rem;
+          text-align: center;
+        }
+        .footer-links {
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ═══ Nav ═══════════════════════════════════════════════════════ -->
+    <nav>
+      <div class="container">
+        <a href="#" class="nav-brand"> <span class="prompt">$</span> mock-openai </a>
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#examples">Examples</a></li>
+          <li><a href="#comparison">vs MSW</a></li>
+          <li>
+            <a href="https://github.com/CopilotKit/mock-openai" class="gh-link" target="_blank">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path
+                  d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+                />
+              </svg>
+              GitHub
+            </a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- ═══ Hero ══════════════════════════════════════════════════════ -->
+    <header class="hero">
+      <div class="container">
+        <div class="hero-badge">
+          <span class="dot"></span>
+          Zero dependencies &middot; Node.js builtins only
+        </div>
+
+        <h1>Deterministic <span class="highlight">OpenAI mock</span> server for testing</h1>
+
+        <p class="hero-sub">
+          Real HTTP server. Real SSE streams. Fixture-driven responses. Drop-in replacement for
+          OpenAI — any process on the machine can reach it.
+        </p>
+
+        <div class="hero-actions">
+          <a href="https://github.com/CopilotKit/mock-openai#readme" class="btn btn-primary">
+            Get Started
+          </a>
+          <a
+            href="https://www.npmjs.com/package/@copilotkit/mock-openai"
+            class="btn btn-secondary"
+            target="_blank"
+          >
+            npm &rarr;
+          </a>
+        </div>
+
+        <div class="hero-install">
+          <span class="dollar">$</span>
+          <code>npm install @copilotkit/mock-openai</code>
+          <button
+            class="copy-btn"
+            onclick="
+              navigator.clipboard.writeText('npm install @copilotkit/mock-openai');
+              this.textContent = '✓';
+              setTimeout(() => (this.textContent = '⧉'), 1500);
+            "
+            title="Copy"
+          >
+            ⧉
+          </button>
+        </div>
+
+        <!-- Two-panel demo -->
+        <div class="demo">
+          <div class="demo-grid">
+            <!-- Left: fixture definition -->
+            <div class="demo-panel demo-fixture">
+              <div class="demo-titlebar">
+                <div class="dots"><span></span><span></span><span></span></div>
+                <span class="title">fixtures/chat.json</span>
+                <div style="width: 54px"></div>
+              </div>
+              <pre>{
+  <span class="key">"fixtures"</span>: [
+    {
+      <span class="key">"match"</span>: {
+        <span class="key">"userMessage"</span>: <span class="str">"capital of France"</span>
+      },
+      <span class="key">"response"</span>: {
+        <span class="key">"content"</span>: <span class="str">"The capital of France is Paris."</span>
+      }
+    }
+  ]
+}</pre>
+            </div>
+
+            <!-- Right: animated terminal -->
+            <div class="demo-panel">
+              <div class="demo-titlebar">
+                <div class="dots"><span></span><span></span><span></span></div>
+                <span class="title">Terminal</span>
+                <div style="width: 54px"></div>
+              </div>
+              <div class="demo-term" id="demo-term"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ═══ Features ══════════════════════════════════════════════════ -->
+    <section id="features" class="reveal">
+      <div class="container">
+        <span class="section-label">Why mock-openai</span>
+        <h2 class="section-title">Everything you need to test AI integrations</h2>
+        <p class="section-desc">
+          Built for E2E test suites where multiple processes — your app, agent workers, framework
+          runtimes — all need to hit the same mock endpoint.
+        </p>
+
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon green">⚡</div>
+            <h3>Real HTTP Server</h3>
+            <p>
+              Runs on an actual port. Any process on the machine can reach it — Next.js, Mastra,
+              LangGraph, Agno, anything that speaks HTTP.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon blue">📡</div>
+            <h3>Authentic SSE Streams</h3>
+            <p>
+              Chat Completions API and Responses API — byte-for-byte identical to real OpenAI.
+              Streaming and non-streaming modes.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon purple">📁</div>
+            <h3>JSON Fixture Files</h3>
+            <p>
+              Define responses as JSON — one file per feature. Load a directory, load a file, or
+              register fixtures programmatically.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon amber">🔧</div>
+            <h3>Tool Call Support</h3>
+            <p>
+              Return tool calls with structured arguments. Match on tool names, tool result IDs, or
+              write custom predicates.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon red">💥</div>
+            <h3>Error Injection</h3>
+            <p>
+              Queue one-shot errors — 429 rate limits, 503 outages, whatever. Fires once, then
+              auto-removes itself.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon green">📋</div>
+            <h3>Request Journal</h3>
+            <p>
+              Every request recorded. Inspect messages, verify tool calls, assert on conversation
+              history. HTTP and programmatic access.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ Code Examples ════════════════════════════════════════════ -->
+    <section id="examples" class="reveal">
+      <div class="container">
+        <span class="section-label">Usage</span>
+        <h2 class="section-title">Fixture-driven. Zero boilerplate.</h2>
+
+        <!-- Example 1: Quick Start -->
+        <div class="code-section" style="margin-top: 3.5rem">
+          <div class="text-side">
+            <h3>Simple text responses</h3>
+            <p>
+              Match on the last user message — substring or regex. The fixture fires when it
+              matches, streaming SSE chunks just like the real API.
+            </p>
+            <ul>
+              <li>First-match-wins routing</li>
+              <li>Substring and RegExp matching</li>
+              <li>Configurable chunk size and latency</li>
+            </ul>
+          </div>
+          <div class="code-block">
+            <div class="code-block-header">
+              fixtures/chat.json
+              <span class="lang-tag">json</span>
+            </div>
+            <pre><code>{
+  <span class="key">"fixtures"</span>: [
+    {
+      <span class="key">"match"</span>: { <span class="key">"userMessage"</span>: <span class="str">"stock price of AAPL"</span> },
+      <span class="key">"response"</span>: {
+        <span class="key">"content"</span>: <span class="str">"The current stock price of Apple Inc. (AAPL) is $150.25."</span>
+      }
+    },
+    {
+      <span class="key">"match"</span>: { <span class="key">"userMessage"</span>: <span class="str">"capital of France"</span> },
+      <span class="key">"response"</span>: {
+        <span class="key">"content"</span>: <span class="str">"The capital of France is Paris."</span>
+      }
+    }
+  ]
+}</code></pre>
+          </div>
+        </div>
+
+        <!-- Example 2: Tool Calls -->
+        <div class="code-section reveal">
+          <div class="code-block">
+            <div class="code-block-header">
+              fixtures/tools.json
+              <span class="lang-tag">json</span>
+            </div>
+            <pre><code>{
+  <span class="key">"fixtures"</span>: [
+    {
+      <span class="key">"match"</span>: { <span class="key">"userMessage"</span>: <span class="str">"one step with eggs"</span> },
+      <span class="key">"response"</span>: {
+        <span class="key">"toolCalls"</span>: [{
+          <span class="key">"name"</span>: <span class="str">"generate_task_steps"</span>,
+          <span class="key">"arguments"</span>: <span class="str">"{\"steps\":[{\"description\":\"Crack eggs\"},{\"description\":\"Preheat oven\"}]}"</span>
+        }]
+      }
+    },
+    {
+      <span class="key">"match"</span>: { <span class="key">"userMessage"</span>: <span class="str">"background color to blue"</span> },
+      <span class="key">"response"</span>: {
+        <span class="key">"toolCalls"</span>: [{
+          <span class="key">"name"</span>: <span class="str">"change_background"</span>,
+          <span class="key">"arguments"</span>: <span class="str">"{\"background\":\"blue\"}"</span>
+        }]
+      }
+    }
+  ]
+}</code></pre>
+          </div>
+          <div class="text-side">
+            <h3>Tool call responses</h3>
+            <p>
+              Return structured tool calls that agent frameworks execute directly. Used in
+              production E2E tests for CopilotKit, Mastra, and LangGraph integrations.
+            </p>
+            <ul>
+              <li>Tool calls with JSON arguments</li>
+              <li>Match on tool name or tool result ID</li>
+              <li>Multi-tool-call responses</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Example 3: Predicate Routing -->
+        <div class="code-section reveal">
+          <div class="text-side">
+            <h3>Predicate-based routing</h3>
+            <p>
+              When substring matching isn't enough, use predicates. Inspect the full request —
+              system prompt flags, message history, model name, anything.
+            </p>
+            <ul>
+              <li>Inspect system prompt state flags</li>
+              <li>Route supervisor agents by conversation state</li>
+              <li>Combine with substring matching (AND logic)</li>
+            </ul>
+          </div>
+          <div class="code-block">
+            <div class="code-block-header">
+              e2e/mock-setup.ts
+              <span class="lang-tag">ts</span>
+            </div>
+            <pre><code><span class="cm">// Supervisor sees the same user message every time,</span>
+<span class="cm">// but system prompt contains state flags</span>
+<span class="kw">mock</span>.<span class="fn">addFixture</span>({
+  <span class="prop">match</span>: {
+    <span class="prop">predicate</span>: (<span class="op">req</span>) <span class="kw">=></span> {
+      <span class="kw">const</span> <span class="op">sys</span> = <span class="op">req</span>.<span class="prop">messages</span>
+        .<span class="fn">find</span>(<span class="op">m</span> <span class="kw">=></span> <span class="op">m</span>.<span class="prop">role</span> === <span class="str">"system"</span>);
+      <span class="kw">return</span> <span class="op">sys</span>?.<span class="prop">content</span>
+        ?.<span class="fn">includes</span>(<span class="str">"Flights found: false"</span>);
+    }
+  },
+  <span class="prop">response</span>: {
+    <span class="prop">toolCalls</span>: [{
+      <span class="prop">name</span>: <span class="str">"supervisor_response"</span>,
+      <span class="prop">arguments</span>: <span class="str">'{"next_agent":"flights_agent"}'</span>
+    }]
+  }
+});</code></pre>
+          </div>
+        </div>
+
+        <!-- Example 4: E2E Setup -->
+        <div class="code-section reveal">
+          <div class="code-block">
+            <div class="code-block-header">
+              e2e/global-setup.ts
+              <span class="lang-tag">ts</span>
+            </div>
+            <pre><code><span class="kw">import</span> { <span class="type">MockOpenAI</span> } <span class="kw">from</span> <span class="str">"@copilotkit/mock-openai"</span>;
+
+<span class="kw">const</span> <span class="op">mock</span> = <span class="kw">new</span> <span class="type">MockOpenAI</span>({ <span class="prop">port</span>: <span class="num">5555</span> });
+
+<span class="cm">// Load JSON fixture files</span>
+<span class="op">mock</span>.<span class="fn">loadFixtureDir</span>(<span class="str">"./fixtures/openai"</span>);
+
+<span class="cm">// Catch-all for tool results</span>
+<span class="op">mock</span>.<span class="fn">addFixture</span>({
+  <span class="prop">match</span>: {
+    <span class="prop">predicate</span>: (<span class="op">req</span>) <span class="kw">=></span>
+      <span class="op">req</span>.<span class="prop">messages</span>.<span class="fn">at</span>(-<span class="num">1</span>)?.<span class="prop">role</span> === <span class="str">"tool"</span>
+  },
+  <span class="prop">response</span>: { <span class="prop">content</span>: <span class="str">"Done!"</span> }
+});
+
+<span class="kw">const</span> <span class="op">url</span> = <span class="kw">await</span> <span class="op">mock</span>.<span class="fn">start</span>();
+
+<span class="cm">// Every process on the machine can reach this</span>
+<span class="op">process</span>.<span class="prop">env</span>.<span class="prop">OPENAI_BASE_URL</span> = <span class="str">`${url}/v1`</span>;
+<span class="op">process</span>.<span class="prop">env</span>.<span class="prop">OPENAI_API_KEY</span> = <span class="str">"mock-key"</span>;</code></pre>
+          </div>
+          <div class="text-side">
+            <h3>E2E global setup</h3>
+            <p>
+              Start the mock server once in Playwright's global setup. All child processes —
+              Next.js, agent workers, CopilotKit runtime — inherit <code>OPENAI_BASE_URL</code> and
+              hit the same server.
+            </p>
+            <ul>
+              <li>One server, many processes</li>
+              <li>JSON fixtures loaded from disk</li>
+              <li>Programmatic catch-alls for tool results</li>
+              <li>Universal fallback prevents 404 crashes</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ Comparison ═══════════════════════════════════════════════ -->
+    <section id="comparison" class="comparison reveal">
+      <div class="container">
+        <span class="section-label">Comparison</span>
+        <h2 class="section-title">mock-openai vs MSW</h2>
+        <p class="section-desc">
+          MSW is great for in-process API mocking. mock-openai is for when multiple processes need
+          to hit the same OpenAI endpoint.
+        </p>
+
+        <div class="arch-diagram">
+          <span class="dim">// MSW: only intercepts in the process that calls server.listen()</span
+          ><br />
+          <span class="dim"
+            >// mock-openai: real server on a real port — any process can reach it</span
+          ><br /><br />
+          <span class="process">Playwright test runner</span><br />
+          <span class="arrow">&nbsp;&nbsp;└─</span> <span class="process">controls browser</span>
+          <span class="arrow">→</span> <span class="process">Next.js app</span>
+          <span class="dim">(separate process)</span><br />
+          <span class="arrow"
+            >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─</span
+          >
+          <span class="env">OPENAI_BASE_URL</span> <span class="arrow">→</span>
+          <span class="mock">mock-openai :5555</span><br />
+          <span class="arrow"
+            >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─</span
+          >
+          <span class="process">Mastra agent workers</span><br />
+          <span class="arrow"
+            >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─</span
+          >
+          <span class="process">LangGraph workers</span><br />
+          <span class="arrow"
+            >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─</span
+          >
+          <span class="process">CopilotKit runtime</span>
+        </div>
+
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th>mock-openai</th>
+              <th>MSW</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Cross-process interception</td>
+              <td class="yes">Real server ✓</td>
+              <td class="no">In-process only</td>
+            </tr>
+            <tr>
+              <td>Chat Completions SSE</td>
+              <td class="yes">Built-in ✓</td>
+              <td class="manual">Manual — build data/[DONE] yourself</td>
+            </tr>
+            <tr>
+              <td>Responses API SSE</td>
+              <td class="yes">Built-in ✓</td>
+              <td class="manual">Manual — MSW sse() uses wrong format</td>
+            </tr>
+            <tr>
+              <td>Fixture files (JSON)</td>
+              <td class="yes">Yes ✓</td>
+              <td class="no">No — handlers are code-only</td>
+            </tr>
+            <tr>
+              <td>Request journal</td>
+              <td class="yes">Yes ✓</td>
+              <td class="no">No — track manually</td>
+            </tr>
+            <tr>
+              <td>Non-streaming responses</td>
+              <td class="yes">Yes ✓</td>
+              <td class="yes">Yes ✓</td>
+            </tr>
+            <tr>
+              <td>Error injection (one-shot)</td>
+              <td class="yes">Yes ✓</td>
+              <td class="yes">Yes (server.use)</td>
+            </tr>
+            <tr>
+              <td>CLI server</td>
+              <td class="yes">Yes ✓</td>
+              <td class="no">No</td>
+            </tr>
+            <tr>
+              <td>Dependencies</td>
+              <td class="yes">Zero</td>
+              <td class="no">~300KB</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══ Footer ═══════════════════════════════════════════════════ -->
+    <footer>
+      <div class="container">
+        <div class="footer-left">
+          <span>$</span> mock-openai &middot; MIT License &middot; Built by
+          <a href="https://github.com/CopilotKit" target="_blank">CopilotKit</a>
+        </div>
+        <ul class="footer-links">
+          <li><a href="https://github.com/CopilotKit/mock-openai" target="_blank">GitHub</a></li>
+          <li>
+            <a href="https://www.npmjs.com/package/@copilotkit/mock-openai" target="_blank">npm</a>
+          </li>
+          <li>
+            <a href="https://github.com/CopilotKit/mock-openai#readme" target="_blank">Docs</a>
+          </li>
+          <li>
+            <a href="https://github.com/CopilotKit/mock-openai/issues" target="_blank">Issues</a>
+          </li>
+        </ul>
+      </div>
+    </footer>
+
+    <!-- ═══ Scripts ═══════════════════════════════════════════════════ -->
+    <script>
+      // ── Scroll reveal ────────────────────────────────────────────────
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              e.target.classList.add("visible");
+              observer.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.1 },
+      );
+
+      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+
+      // ── Terminal demo animation ──────────────────────────────────────
+      const termSteps = [
+        // Step 1: User types command
+        { type: "prompt", text: "mock-openai -p 5555 -f ./fixtures", delay: 600 },
+        // Step 2: Server starts
+        {
+          type: "line",
+          html: '<span class="ok">✓ Listening on http://127.0.0.1:5555</span>',
+          delay: 400,
+        },
+        {
+          type: "line",
+          html: '<span class="info">  Loaded 12 fixtures from ./fixtures</span>',
+          delay: 300,
+        },
+        { type: "line", html: "", delay: 600 },
+        // Step 3: Request arrives
+        { type: "line", html: '<span class="req">→ POST /v1/chat/completions</span>', delay: 200 },
+        { type: "line", html: '<span class="info">  model: gpt-4o</span>', delay: 150 },
+        {
+          type: "line",
+          html: '<span class="info">  user: "What is the capital of France?"</span>',
+          delay: 200,
+        },
+        {
+          type: "line",
+          html: '<span class="match">  ✓ matched fixture: "capital of France"</span>',
+          delay: 400,
+        },
+        { type: "line", html: "", delay: 200 },
+        // Step 4: Stream the response
+        {
+          type: "line",
+          html: '<span class="info">  streaming →</span> <span class="streamed" id="stream-target"></span>',
+          delay: 100,
+        },
+        {
+          type: "stream",
+          text: "The capital of France is Paris.",
+          target: "stream-target",
+          charDelay: 45,
+        },
+        { type: "line", html: "", delay: 400 },
+        // Step 5: Done, show prompt again
+        {
+          type: "line",
+          html: '<span class="ok">  ✓ 200 OK</span> <span class="info">— 3 chunks, 0ms latency</span>',
+          delay: 800,
+        },
+      ];
+
+      function runTermDemo() {
+        const term = document.getElementById("demo-term");
+        term.innerHTML = "";
+        let stepIdx = 0;
+
+        function nextStep() {
+          if (stepIdx >= termSteps.length) {
+            // Add blinking cursor, then restart
+            const cursorLine = document.createElement("div");
+            cursorLine.innerHTML = '<span class="prompt-sym">$ </span><span class="cursor"></span>';
+            cursorLine.style.opacity = "1";
+            term.appendChild(cursorLine);
+            setTimeout(runTermDemo, 4000);
+            return;
+          }
+
+          const step = termSteps[stepIdx];
+          stepIdx++;
+
+          if (step.type === "prompt") {
+            // Type out the command character by character
+            const line = document.createElement("div");
+            line.className = "line";
+            line.innerHTML =
+              '<span class="prompt-sym">$ </span><span class="cmd"></span><span class="cursor"></span>';
+            line.classList.add("visible");
+            term.appendChild(line);
+
+            const cmdSpan = line.querySelector(".cmd");
+            const cursor = line.querySelector(".cursor");
+            let ci = 0;
+            function typeChar() {
+              if (ci >= step.text.length) {
+                cursor.remove();
+                setTimeout(nextStep, step.delay);
+                return;
+              }
+              cmdSpan.textContent += step.text[ci];
+              ci++;
+              setTimeout(typeChar, 35 + Math.random() * 30);
+            }
+            typeChar();
+          } else if (step.type === "stream") {
+            // Type into an existing target span
+            const target = document.getElementById(step.target);
+            if (!target) {
+              setTimeout(nextStep, 100);
+              return;
+            }
+            let ci = 0;
+            function typeStream() {
+              if (ci >= step.text.length) {
+                setTimeout(nextStep, step.delay || 300);
+                return;
+              }
+              target.textContent += step.text[ci];
+              ci++;
+              setTimeout(typeStream, step.charDelay);
+            }
+            typeStream();
+          } else {
+            // Regular line — fade in
+            const line = document.createElement("div");
+            line.className = "line";
+            if (step.html === "") {
+              line.innerHTML = "&nbsp;";
+            } else {
+              line.innerHTML = step.html;
+            }
+            term.appendChild(line);
+            // Trigger reflow, then add visible class
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => line.classList.add("visible"));
+            });
+            setTimeout(nextStep, step.delay);
+          }
+        }
+
+        nextStep();
+      }
+
+      // Start when demo scrolls into view
+      const demoObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              runTermDemo();
+              demoObserver.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.3 },
+      );
+
+      demoObserver.observe(document.querySelector(".demo"));
+    </script>
+  </body>
+</html>
