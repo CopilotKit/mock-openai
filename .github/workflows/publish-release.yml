@@ -34,11 +34,10 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create GitHub release tag
+      - name: Create GitHub Release
         if: steps.check.outputs.published == 'false'
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
-          git tag "v${PKG_VERSION}"
-          git push origin "v${PKG_VERSION}"
+          gh release create "v${PKG_VERSION}" --generate-notes --title "v${PKG_VERSION}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
