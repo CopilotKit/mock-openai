@@ -527,6 +527,41 @@ server.close();
 mock.on({ userMessage: "slow" }, { content: "Finally..." }, { latency: 200, chunkSize: 5 });
 ```
 
+## Future Direction
+
+Areas where llmock could grow, and explicit non-goals for the current scope.
+
+### WebSocket APIs
+
+- **Audio and multimodal**: OpenAI Realtime API audio buffers, voice activity detection, and audio transcription are not implemented. Gemini Live audio/video input and output are similarly out of scope. Only text and tool call paths are supported over WebSocket.
+- **Binary WebSocket frames**: Only text frames are processed; binary frames are silently ignored.
+- **WebSocket compression**: `permessage-deflate` is not supported.
+- **Session persistence**: Realtime and Gemini Live sessions exist only for the lifetime of a single WebSocket connection. There is no cross-connection session resumption.
+
+### Streaming
+
+- **Mid-stream interruption**: No way to simulate a server disconnecting partway through a stream (e.g. `truncateAfterChunks`, `disconnectAfterMs`).
+- **Abort/cancellation signaling**: Streaming functions do not accept an `AbortSignal` for client-side cancellation.
+
+### Fixtures
+
+- **Request metadata in predicates**: Predicate functions receive only the `ChatCompletionRequest`, not HTTP headers, method, or URL.
+- **Multi-turn conversation state**: Fixtures are stateless — there is no built-in way to sequence responses across multiple requests in a conversation.
+- **Validation on load**: Fixture files are not schema-validated at load time; malformed fixtures surface as runtime errors.
+- **Inheritance and aliasing**: No `$ref` or `extends` mechanism for fixture reuse across files.
+
+### Testing
+
+- **E2E SDK tests**: The test suite uses raw HTTP and WebSocket frames, not real OpenAI/Anthropic/Gemini client SDKs.
+- **Token counts**: Usage fields are always zero across all providers.
+- **Vision/image content**: Image content parts are not handled by any provider.
+
+### CLI
+
+- **`--watch` mode**: No file-watching to auto-reload fixtures on change.
+- **`--log-level`**: No configurable log verbosity.
+- **`--validate-on-load`**: No flag to validate fixture schemas at startup.
+
 ## License
 
 MIT
