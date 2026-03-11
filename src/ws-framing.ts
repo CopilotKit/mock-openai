@@ -71,6 +71,9 @@ export class WebSocketConnection extends EventEmitter {
       if (!this.socket.destroyed) {
         this.socket.destroy();
       }
+      // Emit close event for server-initiated closes so listeners
+      // (e.g. activeConnections.delete) always fire.
+      this.emit("close", code, reason);
     }, 100);
   }
 
@@ -110,7 +113,7 @@ export class WebSocketConnection extends EventEmitter {
   }
 
   private parseFrames(): void {
-    while (this.buffer.length >= 2) {
+    while (this.buffer.length >= 2 && !this.closed) {
       const byte0 = this.buffer[0];
       const byte1 = this.buffer[1];
 
@@ -180,9 +183,10 @@ export class WebSocketConnection extends EventEmitter {
         // Echo close frame back
         this.writeFrame(OP_CLOSE, payload);
         this.socket.end();
+        this.emit("close", code, reason);
       }
-
-      this.emit("close", code, reason);
+      // If already closed (server-initiated or duplicate), ignore — the
+      // close event was already emitted by close() or the first OP_CLOSE.
       return;
     }
 
