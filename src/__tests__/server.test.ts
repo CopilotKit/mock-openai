@@ -1091,4 +1091,146 @@ describe("stream interruption", () => {
     expect(entry!.response.interrupted).toBe(true);
     expect(entry!.response.interruptReason).toBe("disconnectAfterMs");
   });
+
+  it("tool call interruption via OpenAI /v1/chat/completions with truncateAfterChunks", async () => {
+    // Tool call stream: role chunk + N argument delta chunks + finish chunk
+    // With truncateAfterChunks: 2 we get at most 2 chunks before abort
+    const fixture: Fixture = {
+      match: { userMessage: "tool-truncate" },
+      response: {
+        toolCalls: [{ name: "get_weather", arguments: '{"city":"New York","units":"metric"}' }],
+      },
+      chunkSize: 3,
+      latency: 5,
+      truncateAfterChunks: 2,
+    };
+    instance = await createServer([fixture]);
+    const res = await postPartial(`${instance.url}/v1/chat/completions`, {
+      model: "gpt-4",
+      messages: [{ role: "user", content: "tool-truncate" }],
+    });
+
+    // No [DONE] — stream was cut short
+    expect(res.body).not.toContain("data: [DONE]");
+
+    // Journal must record interruption
+    await new Promise((r) => setTimeout(r, 50));
+    const entry = instance.journal.getLast();
+    expect(entry).not.toBeNull();
+    expect(entry!.response.interrupted).toBe(true);
+    expect(entry!.response.interruptReason).toBe("truncateAfterChunks");
+  });
+
+  it("Claude Messages API /v1/messages with truncateAfterChunks stops stream early", async () => {
+    // Claude SSE events: message_start, content_block_start, N content_block_delta, content_block_stop, message_delta, message_stop
+    // With truncateAfterChunks: 2 the stream ends before message_stop
+    const fixture: Fixture = {
+      match: { userMessage: "claude-truncate" },
+      response: { content: "ABCDEFGHIJKLMNO" }, // 15 chars, chunkSize 3 => 5 deltas
+      chunkSize: 3,
+      latency: 5,
+      truncateAfterChunks: 2,
+    };
+    instance = await createServer([fixture]);
+    const res = await postPartial(`${instance.url}/v1/messages`, {
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 1024,
+      stream: true,
+      messages: [{ role: "user", content: "claude-truncate" }],
+    });
+
+    // No message_stop event — stream was cut short
+    expect(res.body).not.toContain('"message_stop"');
+
+    // Journal records interruption
+    await new Promise((r) => setTimeout(r, 50));
+    const entry = instance.journal.getLast();
+    expect(entry).not.toBeNull();
+    expect(entry!.response.interrupted).toBe(true);
+    expect(entry!.response.interruptReason).toBe("truncateAfterChunks");
+  });
+
+  it("Claude Messages API /v1/messages with disconnectAfterMs stops stream early", async () => {
+    const fixture: Fixture = {
+      match: { userMessage: "claude-disconnect" },
+      response: { content: "A".repeat(150) },
+      chunkSize: 10,
+      latency: 20,
+      disconnectAfterMs: 50,
+    };
+    instance = await createServer([fixture]);
+    const res = await postPartial(`${instance.url}/v1/messages`, {
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 1024,
+      stream: true,
+      messages: [{ role: "user", content: "claude-disconnect" }],
+    });
+
+    // No message_stop event — stream was cut short
+    expect(res.body).not.toContain('"message_stop"');
+
+    // Journal records disconnectAfterMs reason
+    await new Promise((r) => setTimeout(r, 100));
+    const entry = instance.journal.getLast();
+    expect(entry).not.toBeNull();
+    expect(entry!.response.interrupted).toBe(true);
+    expect(entry!.response.interruptReason).toBe("disconnectAfterMs");
+  });
+
+  it("Gemini HTTP SSE streamGenerateContent with truncateAfterChunks stops stream early", async () => {
+    // Gemini SSE: N data-only chunks (no [DONE]). The last chunk has finishReason: "STOP".
+    // With truncateAfterChunks: 2 out of 5 content chunks, finishReason never appears.
+    const fixture: Fixture = {
+      match: { userMessage: "gemini-truncate" },
+      response: { content: "ABCDEFGHIJKLMNO" }, // 15 chars, chunkSize 3 => 5 chunks
+      chunkSize: 3,
+      latency: 5,
+      truncateAfterChunks: 2,
+    };
+    instance = await createServer([fixture]);
+    const res = await postPartial(
+      `${instance.url}/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse`,
+      {
+        contents: [{ role: "user", parts: [{ text: "gemini-truncate" }] }],
+      },
+    );
+
+    // No STOP finishReason in the truncated stream
+    expect(res.body).not.toContain('"STOP"');
+
+    // Journal records interruption
+    await new Promise((r) => setTimeout(r, 50));
+    const entry = instance.journal.getLast();
+    expect(entry).not.toBeNull();
+    expect(entry!.response.interrupted).toBe(true);
+    expect(entry!.response.interruptReason).toBe("truncateAfterChunks");
+  });
+
+  it("HTTP Responses API /v1/responses with truncateAfterChunks stops stream early", async () => {
+    // Responses API SSE ends with response.completed event.
+    // With truncateAfterChunks: 2, that terminal event never appears.
+    const fixture: Fixture = {
+      match: { userMessage: "responses-truncate" },
+      response: { content: "ABCDEFGHIJKLMNO" }, // 15 chars, chunkSize 3 => 5 deltas
+      chunkSize: 3,
+      latency: 5,
+      truncateAfterChunks: 2,
+    };
+    instance = await createServer([fixture]);
+    const res = await postPartial(`${instance.url}/v1/responses`, {
+      model: "gpt-4o",
+      stream: true,
+      input: [{ role: "user", content: "responses-truncate" }],
+    });
+
+    // No response.completed event — stream was cut short
+    expect(res.body).not.toContain("response.completed");
+
+    // Journal records interruption
+    await new Promise((r) => setTimeout(r, 50));
+    const entry = instance.journal.getLast();
+    expect(entry).not.toBeNull();
+    expect(entry!.response.interrupted).toBe(true);
+    expect(entry!.response.interruptReason).toBe("truncateAfterChunks");
+  });
 });
