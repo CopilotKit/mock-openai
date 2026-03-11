@@ -622,11 +622,6 @@ Areas where llmock could grow, and explicit non-goals for the current scope.
 - **WebSocket compression**: `permessage-deflate` is not supported.
 - **Session persistence**: Realtime and Gemini Live sessions exist only for the lifetime of a single WebSocket connection. There is no cross-connection session resumption.
 
-### Streaming
-
-- **Mid-stream interruption**: No way to simulate a server disconnecting partway through a stream (e.g. `truncateAfterChunks`, `disconnectAfterMs`).
-- **Abort/cancellation signaling**: Streaming functions do not accept an `AbortSignal` for client-side cancellation.
-
 ### Fixtures
 
 - **Request metadata in predicates**: Predicate functions receive only the `ChatCompletionRequest`, not HTTP headers, method, or URL.
@@ -636,7 +631,7 @@ Areas where llmock could grow, and explicit non-goals for the current scope.
 
 ### Testing
 
-- **E2E SDK tests**: The test suite uses raw HTTP and WebSocket frames, not real OpenAI/Anthropic/Gemini client SDKs.
+- **Live API conformance**: The `api-conformance` tests validate response format structure but do not run against real LLM APIs. A subset of tests that hit actual OpenAI/Anthropic/Gemini endpoints (gated behind API keys) would catch format drift as providers evolve their APIs.
 - **Token counts**: Usage fields are always zero across all providers.
 - **Vision/image content**: Image content parts are not handled by any provider.
 
