@@ -1,8 +1,10 @@
 # @copilotkit/llmock [![Unit Tests](https://github.com/CopilotKit/llmock/actions/workflows/test-unit.yml/badge.svg)](https://github.com/CopilotKit/llmock/actions/workflows/test-unit.yml)
 
-Deterministic multi-provider mock LLM server for testing. Streams SSE responses in real OpenAI, Claude, and Gemini API formats, driven entirely by fixtures. Zero runtime dependencies — built on Node.js builtins only.
+https://github.com/user-attachments/assets/1aa9f81d-7efb-4bd2-8e81-51f466f8a8e3
 
-Supports both streaming (SSE) and non-streaming JSON responses across OpenAI (Chat Completions + Responses), Anthropic Claude (Messages), and Google Gemini (GenerateContent) APIs. Text completions, tool calls, and error injection. Point any process at it via `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, or Gemini base URL and get reproducible, instant responses.
+Deterministic multi-provider mock LLM server for testing. Streams SSE and WebSocket responses in real OpenAI, Claude, and Gemini API formats, driven entirely by fixtures. Zero runtime dependencies — built on Node.js builtins only.
+
+Supports streaming (SSE), non-streaming JSON, and WebSocket responses across OpenAI (Chat Completions + Responses + Realtime), Anthropic Claude (Messages), and Google Gemini (GenerateContent + Live) APIs. Text completions, tool calls, and error injection. Point any process at it via `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, or Gemini base URL and get reproducible, instant responses.
 
 ## Install
 
@@ -385,7 +387,7 @@ mock.nextRequestError(429, {
 
 ### Request Journal
 
-Every request to all API endpoints (`/v1/chat/completions`, `/v1/responses`, `/v1/messages`, and Gemini endpoints) is recorded in a journal.
+Every request to all API endpoints (`/v1/chat/completions`, `/v1/responses`, `/v1/messages`, Gemini endpoints, and all WebSocket endpoints) is recorded in a journal.
 
 #### Programmatic Access
 
