@@ -117,9 +117,29 @@ OPENAI_API_KEY=mock-key
 
 # Or for Anthropic Claude:
 ANTHROPIC_BASE_URL=http://localhost:5555/v1
+ANTHROPIC_API_KEY=mock-key
 
-# Or for Google Gemini — point at the base URL:
-# http://localhost:5555/v1beta
+# Or for Google Gemini (set baseUrl in code — see below):
+GOOGLE_API_KEY=mock-key
+```
+
+For Google Gemini, the SDK doesn't support a base URL env var — pass it in code:
+
+```typescript
+// @google/genai (v1.x)
+import { GoogleGenAI } from "@google/genai";
+const ai = new GoogleGenAI({
+  apiKey: process.env.GOOGLE_API_KEY,
+  httpOptions: { baseUrl: "http://localhost:5555" },
+});
+
+// @google/generative-ai (v0.x)
+import { GoogleGenerativeAI } from "@google/generative-ai";
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+const model = genAI.getGenerativeModel(
+  { model: "gemini-2.0-flash" },
+  { baseUrl: "http://localhost:5555" },
+);
 ```
 
 ### JSON Fixture Files
