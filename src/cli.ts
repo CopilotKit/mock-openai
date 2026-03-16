@@ -3,18 +3,23 @@ import { parseArgs } from "node:util";
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { createServer } from "./server.js";
-import { loadFixtureFile, loadFixturesFromDir } from "./fixture-loader.js";
+import { loadFixtureFile, loadFixturesFromDir, validateFixtures } from "./fixture-loader.js";
+import { Logger, type LogLevel } from "./logger.js";
+import { watchFixtures } from "./watcher.js";
 
 const HELP = `
 Usage: llmock [options]
 
 Options:
-  -p, --port <number>      Port to listen on (default: 4010)
-  -h, --host <string>      Host to bind to (default: 127.0.0.1)
-  -f, --fixtures <path>    Path to fixtures directory or file (default: ./fixtures)
-  -l, --latency <ms>       Latency in ms between SSE chunks (default: 0)
+  -p, --port <number>       Port to listen on (default: 4010)
+  -h, --host <string>       Host to bind to (default: 127.0.0.1)
+  -f, --fixtures <path>     Path to fixtures directory or file (default: ./fixtures)
+  -l, --latency <ms>        Latency in ms between SSE chunks (default: 0)
   -c, --chunk-size <chars>  Chunk size in characters (default: 20)
-      --help               Show this help message
+  -w, --watch               Watch fixture path for changes and reload
+      --log-level <level>   Log verbosity: silent, info, debug (default: info)
+      --validate-on-load    Validate fixture schemas at startup
+      --help                Show this help message
 `.trim();
 
 const { values } = parseArgs({
@@ -24,6 +29,9 @@ const { values } = parseArgs({
     fixtures: { type: "string", short: "f", default: "./fixtures" },
     latency: { type: "string", short: "l", default: "0" },
     "chunk-size": { type: "string", short: "c", default: "20" },
+    watch: { type: "boolean", short: "w", default: false },
+    "log-level": { type: "string", default: "info" },
+    "validate-on-load": { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
   strict: true,
@@ -39,6 +47,15 @@ const host = values.host!;
 const latency = Number(values.latency);
 const chunkSize = Number(values["chunk-size"]);
 const fixturePath = resolve(values.fixtures!);
+const watchMode = values.watch!;
+const validateOnLoad = values["validate-on-load"]!;
+const logLevelStr = values["log-level"]!;
+
+if (!["silent", "info", "debug"].includes(logLevelStr)) {
+  console.error(`Invalid log-level: ${logLevelStr} (must be silent, info, or debug)`);
+  process.exit(1);
+}
+const logLevel = logLevelStr as LogLevel;
 
 if (Number.isNaN(port) || port < 0 || port > 65535) {
   console.error(`Invalid port: ${values.port}`);
@@ -55,34 +72,75 @@ if (Number.isNaN(chunkSize) || chunkSize < 1) {
   process.exit(1);
 }
 
+const logger = new Logger(logLevel);
+
 async function main() {
   // Load fixtures from path (detect file vs directory)
+  let isDir: boolean;
   let fixtures;
   try {
     const stat = statSync(fixturePath);
-    if (stat.isDirectory()) {
-      fixtures = loadFixturesFromDir(fixturePath);
+    isDir = stat.isDirectory();
+    if (isDir) {
+      fixtures = loadFixturesFromDir(fixturePath, logger);
     } else {
-      fixtures = loadFixtureFile(fixturePath);
+      fixtures = loadFixtureFile(fixturePath, logger);
     }
-  } catch {
-    console.error(`Fixtures path not found: ${fixturePath}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to load fixtures from ${fixturePath}: ${msg}`);
     process.exit(1);
   }
 
-  console.log(`Loaded ${fixtures.length} fixture(s) from ${fixturePath}`);
+  logger.info(`Loaded ${fixtures.length} fixture(s) from ${fixturePath}`);
+
+  // Validate fixtures if requested
+  if (validateOnLoad) {
+    const results = validateFixtures(fixtures);
+    const errors = results.filter((r) => r.severity === "error");
+    const warnings = results.filter((r) => r.severity === "warning");
+
+    for (const w of warnings) {
+      logger.warn(`Fixture ${w.fixtureIndex}: ${w.message}`);
+    }
+    for (const e of errors) {
+      logger.error(`Fixture ${e.fixtureIndex}: ${e.message}`);
+    }
+
+    if (errors.length > 0) {
+      console.error(`Validation failed: ${errors.length} error(s), ${warnings.length} warning(s)`);
+      process.exit(1);
+    }
+  }
 
   const instance = await createServer(fixtures, {
     port,
     host,
     latency,
     chunkSize,
+    logLevel,
   });
 
-  console.log(`llmock server listening on ${instance.url}`);
+  logger.info(`llmock server listening on ${instance.url}`);
+
+  // Start file watcher if requested
+  let watcher: { close: () => void } | null = null;
+  if (watchMode) {
+    const loadFn = isDir!
+      ? () => loadFixturesFromDir(fixturePath, logger)
+      : () => loadFixtureFile(fixturePath, logger);
+
+    watcher = watchFixtures(fixturePath, fixtures, loadFn, {
+      logger,
+      validate: validateOnLoad,
+      validateFn: validateFixtures,
+    });
+    logger.info(`Watching ${fixturePath} for changes`);
+  }
 
   function shutdown() {
-    console.log("\nShutting down...");
+    logger.info("Shutting down...");
+    if (watcher) watcher.close();
     instance.server.close(() => {
       process.exit(0);
     });

@@ -590,14 +590,17 @@ The package includes a standalone server binary:
 llmock [options]
 ```
 
-| Option         | Short | Default      | Description                        |
-| -------------- | ----- | ------------ | ---------------------------------- |
-| `--port`       | `-p`  | `4010`       | Port to listen on                  |
-| `--host`       | `-h`  | `127.0.0.1`  | Host to bind to                    |
-| `--fixtures`   | `-f`  | `./fixtures` | Path to fixtures directory or file |
-| `--latency`    | `-l`  | `0`          | Latency between SSE chunks (ms)    |
-| `--chunk-size` | `-c`  | `20`         | Characters per SSE chunk           |
-| `--help`       |       |              | Show help                          |
+| Option               | Short | Default      | Description                               |
+| -------------------- | ----- | ------------ | ----------------------------------------- |
+| `--port`             | `-p`  | `4010`       | Port to listen on                         |
+| `--host`             | `-h`  | `127.0.0.1`  | Host to bind to                           |
+| `--fixtures`         | `-f`  | `./fixtures` | Path to fixtures directory or file        |
+| `--latency`          | `-l`  | `0`          | Latency between SSE chunks (ms)           |
+| `--chunk-size`       | `-c`  | `20`         | Characters per SSE chunk                  |
+| `--watch`            | `-w`  |              | Watch fixture path for changes and reload |
+| `--log-level`        |       | `info`       | Log verbosity: `silent`, `info`, `debug`  |
+| `--validate-on-load` |       |              | Validate fixture schemas at startup       |
+| `--help`             |       |              | Show help                                 |
 
 ```bash
 # Start with bundled example fixtures
@@ -696,12 +699,6 @@ Areas where llmock could grow, and explicit non-goals for the current scope.
 - **Live API drift detection**: The `drift` test suite runs against real OpenAI, Anthropic, and Gemini APIs to catch response format drift. See [DRIFT.md](DRIFT.md) for details on the three-layer triangulation approach, how to run tests, and how to fix detected drift. Runs daily in CI; requires API keys.
 - **Token counts**: Usage fields are always zero across all providers.
 - **Vision/image content**: Image content parts are not handled by any provider.
-
-### CLI
-
-- **`--watch` mode**: No file-watching to auto-reload fixtures on change.
-- **`--log-level`**: No configurable log verbosity.
-- **`--validate-on-load`**: No flag to validate fixture schemas at startup.
 
 ## Real-World Usage
 

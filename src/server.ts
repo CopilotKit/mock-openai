@@ -20,6 +20,7 @@ import { upgradeToWebSocket, type WebSocketConnection } from "./ws-framing.js";
 import { handleWebSocketResponses } from "./ws-responses.js";
 import { handleWebSocketRealtime } from "./ws-realtime.js";
 import { handleWebSocketGeminiLive } from "./ws-gemini-live.js";
+import { Logger } from "./logger.js";
 
 export interface ServerInstance {
   server: http.Server;
@@ -73,7 +74,7 @@ async function handleCompletions(
   res: http.ServerResponse,
   fixtures: Fixture[],
   journal: Journal,
-  defaults: { latency: number; chunkSize: number },
+  defaults: { latency: number; chunkSize: number; logger: Logger },
 ): Promise<void> {
   setCorsHeaders(res);
 
@@ -272,9 +273,11 @@ export async function createServer(
 ): Promise<ServerInstance> {
   const host = options?.host ?? "127.0.0.1";
   const port = options?.port ?? 0;
+  const logger = new Logger(options?.logLevel ?? "silent");
   const defaults = {
     latency: options?.latency ?? 0,
     chunkSize: Math.max(1, options?.chunkSize ?? DEFAULT_CHUNK_SIZE),
+    logger,
   };
 
   const journal = new Journal();
@@ -482,7 +485,7 @@ export async function createServer(
         ws = upgradeToWebSocket(req, socket);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "WebSocket upgrade failed";
-        console.error(`[LLMock] WebSocket upgrade error: ${msg}`);
+        logger.error(`WebSocket upgrade error: ${msg}`);
         if (!socket.destroyed) socket.destroy();
         return;
       }
@@ -490,7 +493,7 @@ export async function createServer(
       activeConnections.add(ws);
 
       ws.on("error", (err: Error) => {
-        console.error(`[LLMock] WebSocket error: ${err.message}`);
+        logger.error(`WebSocket error: ${err.message}`);
         activeConnections.delete(ws);
       });
 
