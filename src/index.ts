@@ -5,7 +5,12 @@ export { LLMock } from "./llmock.js";
 export { createServer, type ServerInstance } from "./server.js";
 
 // Fixture loading
-export { loadFixtureFile, loadFixturesFromDir } from "./fixture-loader.js";
+export { loadFixtureFile, loadFixturesFromDir, validateFixtures } from "./fixture-loader.js";
+export type { ValidationResult } from "./fixture-loader.js";
+
+// Logger
+export { Logger } from "./logger.js";
+export type { LogLevel } from "./logger.js";
 
 // Journal
 export { Journal } from "./journal.js";

@@ -181,4 +181,6 @@ export interface MockServerOptions {
   host?: string;
   latency?: number;
   chunkSize?: number;
+  /** Log verbosity. CLI default is "info"; programmatic default is undefined (silent). */
+  logLevel?: "silent" | "info" | "debug";
 }
