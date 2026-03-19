@@ -106,7 +106,7 @@ When a model is deprecated:
 
 ## WebSocket Drift Coverage
 
-In addition to the 19 existing drift tests (16 HTTP response-shape + 3 model deprecation), WebSocket drift tests cover llmock's WS protocols:
+In addition to the 19 existing drift tests (16 HTTP response-shape + 3 model deprecation), WebSocket drift tests cover llmock's WS protocols (4 verified + 2 canary = 6 WS tests):
 
 | Protocol            | Text | Tool Call | Real Endpoint                                                       | Status     |
 | ------------------- | ---- | --------- | ------------------------------------------------------------------- | ---------- |
@@ -138,6 +138,29 @@ Drift tests run on a schedule:
 
 See `.github/workflows/test-drift.yml`.
 
+## Automated Drift Remediation
+
+When the daily drift test detects critical diffs on the `main` branch, the `fix-drift.yml` workflow runs automatically:
+
+1. **Collect** — `scripts/drift-report-collector.ts` runs drift tests and produces a structured `drift-report.json`
+2. **Fix** — `scripts/fix-drift.ts` (default mode) constructs a prompt from the report and invokes Claude Code to fix the builders
+3. **Verify** — Independent `pnpm test` and `pnpm test:drift` steps confirm the fix works
+4. **PR** — `scripts/fix-drift.ts --create-pr` stages and commits the changes, bumps the version, and opens a pull request
+5. **Issue** (on failure) — `scripts/fix-drift.ts --create-issue` opens a GitHub issue with the drift report and Claude Code output
+
+Steps 2 and 4/5 are separate invocations of `fix-drift.ts` with different modes.
+
+### Artifacts
+
+Both workflows upload artifacts:
+
+- `drift-report.json` — structured drift data (retained 30 days)
+- `claude-code-output.log` — Claude Code's reasoning and tool calls (fix workflow only)
+
+### Manual trigger
+
+The fix workflow also supports `workflow_dispatch` for manual runs.
+
 ## Cost
 
-~25 API calls per run (16 HTTP response-shape + 3 model listing + 4 WS + 2 canaries) using the cheapest available models (`gpt-4o-mini`, `gpt-4o-mini-realtime-preview`, `claude-haiku-4-5-20251001`, `gemini-2.5-flash`) with 10-100 max tokens each. Under $0.15/week at daily cadence. When Gemini Live text-capable models become available, this will increase to 6 WS calls.
+~25 API calls per run (16 HTTP response-shape + 3 model listing + 6 WS including canaries) using the cheapest available models (`gpt-4o-mini`, `gpt-4o-mini-realtime-preview`, `claude-haiku-4-5-20251001`, `gemini-2.5-flash`) with 10-100 max tokens each. Under $0.15/week at daily cadence. When Gemini Live text-capable models become available, the 2 canary tests will become full drift tests, increasing real WS connections from 4 to 6.

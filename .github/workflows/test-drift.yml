@@ -6,6 +6,7 @@ on:
 jobs:
   drift:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -14,8 +15,35 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:drift
+
+      - name: Run drift tests
+        id: drift
+        run: |
+          set +e
+          npx tsx scripts/drift-report-collector.ts
+          EXIT_CODE=$?
+          set -e
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ "$EXIT_CODE" -eq 2 ]; then
+            : # critical drift found, continue
+          elif [ "$EXIT_CODE" -ne 0 ]; then
+            echo "::error::Collector script crashed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: drift-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail if critical drift detected
+        if: steps.drift.outputs.exit_code == '2'
+        run: exit 1

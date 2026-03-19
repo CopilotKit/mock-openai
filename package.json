@@ -63,7 +63,9 @@
     "typescript-eslint": "^8.35.1",
     "@anthropic-ai/sdk": "^0.78.0",
     "@google/generative-ai": "^0.24.0",
+    "@types/node": "^22.0.0",
     "openai": "^4.0.0",
+    "tsx": "^4.19.0",
     "vitest": "^3.2.1"
   }
 }

@@ -157,7 +157,7 @@ describe.skipIf(!CLI_AVAILABLE)("CLI: fixture loading", () => {
 
   it("fails with error when --fixtures points to a non-existent path", async () => {
     const { stderr, code } = await runCli(["--fixtures", "/nonexistent/path/to/fixtures"]);
-    expect(stderr).toContain("Failed to load fixtures");
+    expect(stderr).toContain("Fixtures path not found");
     expect(code).toBe(1);
   });
 });

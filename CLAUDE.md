@@ -34,6 +34,15 @@ entire repo, not just staged files.
 - When adding features or fixing bugs, add or update tests
 - Run `pnpm test` before pushing
 
+## Drift Remediation
+
+Automated drift remediation lives in `scripts/`:
+
+- `scripts/drift-report-collector.ts` — runs drift tests, produces `drift-report.json`
+- `scripts/fix-drift.ts` — reads drift report, invokes Claude Code to fix builders, creates PR or issue
+
+See `DRIFT.md` for full documentation and `.github/workflows/fix-drift.yml` for the CI workflow.
+
 ## Commit Messages
 
 - This repo enforces conventional commit prefixes via commitlint: `fix:`, `feat:`, `docs:`, `test:`, `chore:`, `refactor:`, etc.

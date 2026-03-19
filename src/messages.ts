@@ -279,6 +279,9 @@ function buildClaudeToolCallStreamEvents(
     try {
       argsObj = JSON.parse(tc.arguments || "{}");
     } catch {
+      console.warn(
+        `[llmock] Malformed JSON in fixture tool call arguments for "${tc.name}": ${tc.arguments}`,
+      );
       argsObj = {};
     }
     const argsJson = JSON.stringify(argsObj);
@@ -350,6 +353,9 @@ function buildClaudeToolCallResponse(toolCalls: ToolCall[], model: string): obje
       try {
         argsObj = JSON.parse(tc.arguments || "{}");
       } catch {
+        console.warn(
+          `[llmock] Malformed JSON in fixture tool call arguments for "${tc.name}": ${tc.arguments}`,
+        );
         argsObj = {};
       }
       return {

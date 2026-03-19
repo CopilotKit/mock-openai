@@ -1,0 +1,128 @@
+name: Fix Drift
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Drift Tests"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: drift-fix
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Step 0: Configure git identity and create fix branch
+      - name: Configure git
+        run: |
+          git config user.name "llmock-drift-bot"
+          git config user.email "drift-bot@copilotkit.ai"
+          git checkout -B fix/drift-$(date +%Y-%m-%d)-${{ github.run_id }}
+
+      # Step 1: Detect drift and produce report
+      - name: Collect drift report
+        id: detect
+        run: |
+          set +e
+          npx tsx scripts/drift-report-collector.ts
+          EXIT_CODE=$?
+          set -e
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ "$EXIT_CODE" -eq 2 ]; then
+            : # critical drift found, continue
+          elif [ "$EXIT_CODE" -ne 0 ]; then
+            echo "::error::Collector script crashed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
+      # Always upload the report as an artifact
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: drift-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Step 2: Exit if no critical drift
+      - name: Check for critical diffs
+        id: check
+        env:
+          DETECT_EXIT_CODE: ${{ steps.detect.outputs.exit_code }}
+        run: |
+          if [ "$DETECT_EXIT_CODE" = "2" ]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Critical drift detected"
+          else
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "No critical drift detected (exit code: $DETECT_EXIT_CODE) — skipping fix"
+          fi
+
+      # Step 3: Invoke Claude Code to fix
+      - name: Auto-fix drift
+        if: steps.check.outputs.skip != 'true'
+        run: npx tsx scripts/fix-drift.ts
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
+      # Upload Claude Code output for debugging
+      - name: Upload Claude Code logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-code-output
+          path: claude-code-output.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Step 4: Verify fix independently
+      - name: Verify conformance
+        if: steps.check.outputs.skip != 'true'
+        run: pnpm test
+
+      - name: Verify drift resolved
+        if: steps.check.outputs.skip != 'true'
+        run: pnpm test:drift
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
+      # Step 5: Create PR on success
+      - name: Create PR
+        if: success() && steps.check.outputs.skip != 'true'
+        run: npx tsx scripts/fix-drift.ts --create-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 6: Open issue on failure
+      - name: Create issue on failure
+        if: failure() && steps.check.outputs.skip != 'true'
+        run: npx tsx scripts/fix-drift.ts --create-issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

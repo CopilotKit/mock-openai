@@ -87,9 +87,17 @@ async function main() {
       fixtures = loadFixtureFile(fixturePath, logger);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Failed to load fixtures from ${fixturePath}: ${msg}`);
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      console.error(`Fixtures path not found: ${fixturePath}`);
+    } else {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to load fixtures from ${fixturePath}: ${msg}`);
+    }
     process.exit(1);
+  }
+
+  if (fixtures.length === 0) {
+    console.warn("Warning: No fixtures loaded. The server will return 404 for all requests.");
   }
 
   logger.info(`Loaded ${fixtures.length} fixture(s) from ${fixturePath}`);
