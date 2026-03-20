@@ -23,7 +23,11 @@ export function getTextContent(content: string | ContentPart[] | null): string |
   return null;
 }
 
-export function matchFixture(fixtures: Fixture[], req: ChatCompletionRequest): Fixture | null {
+export function matchFixture(
+  fixtures: Fixture[],
+  req: ChatCompletionRequest,
+  matchCounts?: Map<Fixture, number>,
+): Fixture | null {
   for (const fixture of fixtures) {
     const { match } = fixture;
 
@@ -57,6 +61,23 @@ export function matchFixture(fixtures: Fixture[], req: ChatCompletionRequest): F
       if (!found) continue;
     }
 
+    // inputText — match against the embedding input text (used by embeddings endpoint)
+    if (match.inputText !== undefined) {
+      const embeddingInput = req.embeddingInput;
+      if (!embeddingInput) continue;
+      if (typeof match.inputText === "string") {
+        if (!embeddingInput.includes(match.inputText)) continue;
+      } else {
+        if (!match.inputText.test(embeddingInput)) continue;
+      }
+    }
+
+    // responseFormat — exact string match against request response_format.type
+    if (match.responseFormat !== undefined) {
+      const reqType = req.response_format?.type;
+      if (reqType !== match.responseFormat) continue;
+    }
+
     // model — exact string or regexp
     if (match.model !== undefined) {
       if (typeof match.model === "string") {
@@ -64,6 +85,12 @@ export function matchFixture(fixtures: Fixture[], req: ChatCompletionRequest): F
       } else {
         if (!match.model.test(req.model)) continue;
       }
+    }
+
+    // sequenceIndex — check against the fixture's match count
+    if (match.sequenceIndex !== undefined && matchCounts !== undefined) {
+      const count = matchCounts.get(fixture) ?? 0;
+      if (count !== match.sequenceIndex) continue;
     }
 
     return fixture;

@@ -1,16 +1,24 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { Fixture, FixtureFile, FixtureFileEntry } from "./types.js";
-import { isTextResponse, isToolCallResponse, isErrorResponse } from "./helpers.js";
+import {
+  isTextResponse,
+  isToolCallResponse,
+  isErrorResponse,
+  isEmbeddingResponse,
+} from "./helpers.js";
 import type { Logger } from "./logger.js";
 
 function entryToFixture(entry: FixtureFileEntry): Fixture {
   return {
     match: {
       userMessage: entry.match.userMessage,
+      inputText: entry.match.inputText,
       toolCallId: entry.match.toolCallId,
       toolName: entry.match.toolName,
       model: entry.match.model,
+      responseFormat: entry.match.responseFormat,
+      ...(entry.match.sequenceIndex !== undefined && { sequenceIndex: entry.match.sequenceIndex }),
     },
     response: entry.response,
     ...(entry.latency !== undefined && { latency: entry.latency }),
@@ -19,6 +27,7 @@ function entryToFixture(entry: FixtureFileEntry): Fixture {
       truncateAfterChunks: entry.truncateAfterChunks,
     }),
     ...(entry.disconnectAfterMs !== undefined && { disconnectAfterMs: entry.disconnectAfterMs }),
+    ...(entry.streamingProfile !== undefined && { streamingProfile: entry.streamingProfile }),
   };
 }
 
@@ -121,11 +130,17 @@ export function validateFixtures(fixtures: Fixture[]): ValidationResult[] {
     // --- Error checks ---
 
     // Response type recognition
-    if (!isTextResponse(response) && !isToolCallResponse(response) && !isErrorResponse(response)) {
+    if (
+      !isTextResponse(response) &&
+      !isToolCallResponse(response) &&
+      !isErrorResponse(response) &&
+      !isEmbeddingResponse(response)
+    ) {
       results.push({
         severity: "error",
         fixtureIndex: i,
-        message: "response is not a recognized type (must have content, toolCalls, or error)",
+        message:
+          "response is not a recognized type (must have content, toolCalls, error, or embedding)",
       });
     }
 
@@ -188,6 +203,27 @@ export function validateFixtures(fixtures: Fixture[]): ValidationResult[] {
       }
     }
 
+    // Embedding response checks
+    if (isEmbeddingResponse(response)) {
+      if (response.embedding.length === 0) {
+        results.push({
+          severity: "error",
+          fixtureIndex: i,
+          message: "embedding array is empty",
+        });
+      }
+      for (let j = 0; j < response.embedding.length; j++) {
+        if (typeof response.embedding[j] !== "number") {
+          results.push({
+            severity: "error",
+            fixtureIndex: i,
+            message: `embedding[${j}] is not a number`,
+          });
+          break; // one error is enough
+        }
+      }
+    }
+
     // Numeric sanity checks
     if (f.latency !== undefined && f.latency < 0) {
       results.push({
@@ -239,6 +275,8 @@ export function validateFixtures(fixtures: Fixture[]): ValidationResult[] {
     const match = f.match;
     const hasDiscriminator =
       match.userMessage !== undefined ||
+      match.inputText !== undefined ||
+      match.responseFormat !== undefined ||
       match.toolCallId !== undefined ||
       match.toolName !== undefined ||
       match.model !== undefined ||

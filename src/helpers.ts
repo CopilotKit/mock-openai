@@ -1,13 +1,24 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import type * as http from "node:http";
 import type {
   FixtureResponse,
   TextResponse,
   ToolCallResponse,
   ErrorResponse,
+  EmbeddingResponse,
   SSEChunk,
   ToolCall,
   ChatCompletion,
 } from "./types.js";
+
+export function flattenHeaders(headers: http.IncomingHttpHeaders): Record<string, string> {
+  const flat: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) continue;
+    flat[key] = Array.isArray(value) ? value.join(", ") : value;
+  }
+  return flat;
+}
 
 export function generateId(prefix = "chatcmpl"): string {
   return `${prefix}-${randomBytes(12).toString("base64url")}`;
@@ -39,6 +50,10 @@ export function isErrorResponse(r: FixtureResponse): r is ErrorResponse {
     (r as ErrorResponse).error !== null &&
     typeof (r as ErrorResponse).error === "object"
   );
+}
+
+export function isEmbeddingResponse(r: FixtureResponse): r is EmbeddingResponse {
+  return "embedding" in r && Array.isArray((r as EmbeddingResponse).embedding);
 }
 
 export function buildTextChunks(content: string, model: string, chunkSize: number): SSEChunk[] {
@@ -202,5 +217,56 @@ export function buildToolCallCompletion(toolCalls: ToolCall[], model: string): C
       },
     ],
     usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+  };
+}
+
+// ─── Embedding helpers ─────────────────────────────────────────────────────
+
+const DEFAULT_EMBEDDING_DIMENSIONS = 1536;
+
+/**
+ * Generate a deterministic embedding vector from input text.
+ * Hashes the input with SHA-256 and spreads the hash bytes across
+ * the requested number of dimensions, producing values in [-1, 1].
+ */
+export function generateDeterministicEmbedding(
+  input: string,
+  dimensions: number = DEFAULT_EMBEDDING_DIMENSIONS,
+): number[] {
+  let currentHash = createHash("sha256").update(input).digest();
+  const embedding: number[] = new Array(dimensions);
+  for (let i = 0; i < dimensions; i++) {
+    if (i > 0 && i % 32 === 0) {
+      currentHash = createHash("sha256").update(currentHash).digest();
+    }
+    // Map 0-255 → -1.0 to 1.0
+    embedding[i] = currentHash[i % 32] / 127.5 - 1;
+  }
+  return embedding;
+}
+
+export interface EmbeddingAPIResponse {
+  object: "list";
+  data: { object: "embedding"; index: number; embedding: number[] }[];
+  model: string;
+  usage: { prompt_tokens: number; total_tokens: number };
+}
+
+/**
+ * Build an OpenAI-format embeddings API response for one or more inputs.
+ */
+export function buildEmbeddingResponse(
+  embeddings: number[][],
+  model: string,
+): EmbeddingAPIResponse {
+  return {
+    object: "list",
+    data: embeddings.map((embedding, index) => ({
+      object: "embedding" as const,
+      index,
+      embedding,
+    })),
+    model,
+    usage: { prompt_tokens: 0, total_tokens: 0 },
   };
 }

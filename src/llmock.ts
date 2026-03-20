@@ -82,6 +82,31 @@ export class LLMock {
     return this.on({ userMessage: pattern }, response, opts);
   }
 
+  onEmbedding(
+    pattern: string | RegExp,
+    response: FixtureResponse,
+    opts?: {
+      latency?: number;
+      chunkSize?: number;
+    },
+  ): this {
+    return this.on({ inputText: pattern }, response, opts);
+  }
+
+  onJsonOutput(
+    pattern: string | RegExp,
+    jsonContent: object | string,
+    opts?: {
+      latency?: number;
+      chunkSize?: number;
+      truncateAfterChunks?: number;
+      disconnectAfterMs?: number;
+    },
+  ): this {
+    const content = typeof jsonContent === "string" ? jsonContent : JSON.stringify(jsonContent);
+    return this.on({ userMessage: pattern, responseFormat: "json_object" }, { content }, opts);
+  }
+
   onToolCall(
     name: string,
     response: FixtureResponse,
@@ -160,6 +185,13 @@ export class LLMock {
 
   clearRequests(): void {
     this.journal.clear();
+  }
+
+  resetMatchCounts(): this {
+    if (this.serverInstance) {
+      this.serverInstance.journal.clearMatchCounts();
+    }
+    return this;
   }
 
   // ---- Reset ----
