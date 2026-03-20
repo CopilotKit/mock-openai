@@ -18,6 +18,7 @@ import { isTextResponse, isToolCallResponse, isErrorResponse } from "./helpers.j
 import { createInterruptionSignal } from "./interruption.js";
 import { delay } from "./sse-writer.js";
 import type { Journal } from "./journal.js";
+import type { Logger } from "./logger.js";
 import type { WebSocketConnection } from "./ws-framing.js";
 
 interface ResponseCreateMessage {
@@ -56,15 +57,16 @@ export function handleWebSocketResponses(
   ws: WebSocketConnection,
   fixtures: Fixture[],
   journal: Journal,
-  defaults: { latency: number; chunkSize: number; model: string },
+  defaults: { latency: number; chunkSize: number; model: string; logger: Logger },
 ): void {
+  const { logger } = defaults;
   // Serialize message processing to prevent event interleaving
   let pending = Promise.resolve();
   ws.on("message", (raw: string) => {
     pending = pending.then(() =>
       processMessage(raw, ws, fixtures, journal, defaults).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "Internal error";
-        console.error(`[LLMock] WebSocket responses error: ${msg}`);
+        logger.error(`WebSocket responses error: ${msg}`);
         try {
           ws.send(JSON.stringify(buildErrorEvent(msg, "server_error")));
         } catch {
@@ -80,7 +82,7 @@ async function processMessage(
   ws: WebSocketConnection,
   fixtures: Fixture[],
   journal: Journal,
-  defaults: { latency: number; chunkSize: number; model: string },
+  defaults: { latency: number; chunkSize: number; model: string; logger: Logger },
 ): Promise<void> {
   let parsed: unknown;
   try {
@@ -134,7 +136,11 @@ async function processMessage(
   };
 
   const completionReq = responsesToCompletionRequest(responsesReq);
-  const fixture = matchFixture(fixtures, completionReq);
+  const fixture = matchFixture(fixtures, completionReq, journal.fixtureMatchCounts);
+
+  if (fixture) {
+    journal.incrementFixtureMatchCount(fixture, fixtures);
+  }
 
   if (!fixture) {
     journal.add({

@@ -23,6 +23,8 @@ export { handleResponses, buildTextStreamEvents, buildToolCallStreamEvents } fro
 export type { ResponsesSSEEvent } from "./responses.js";
 export { handleMessages } from "./messages.js";
 export { handleGemini } from "./gemini.js";
+export { handleEmbeddings } from "./embeddings.js";
+export { handleBedrock, bedrockToCompletionRequest } from "./bedrock.js";
 
 // WebSocket
 export { WebSocketConnection, upgradeToWebSocket, computeAcceptKey } from "./ws-framing.js";
@@ -32,20 +34,25 @@ export { handleWebSocketGeminiLive } from "./ws-gemini-live.js";
 
 // Helpers
 export {
+  flattenHeaders,
   generateId,
   generateToolCallId,
   generateMessageId,
   generateToolUseId,
   buildTextChunks,
   buildToolCallChunks,
+  isEmbeddingResponse,
+  generateDeterministicEmbedding,
+  buildEmbeddingResponse,
 } from "./helpers.js";
+export type { EmbeddingAPIResponse } from "./helpers.js";
 
 // Interruption
 export { createInterruptionSignal } from "./interruption.js";
 export type { InterruptionControl } from "./interruption.js";
 
 // SSE
-export { writeSSEStream, writeErrorResponse, delay } from "./sse-writer.js";
+export { writeSSEStream, writeErrorResponse, delay, calculateDelay } from "./sse-writer.js";
 export type { StreamOptions } from "./sse-writer.js";
 
 // Types
@@ -59,6 +66,7 @@ export type {
   ToolCall,
   ToolCallResponse,
   ErrorResponse,
+  EmbeddingResponse,
   FixtureResponse,
   Fixture,
   FixtureFile,
@@ -69,5 +77,6 @@ export type {
   SSEDelta,
   SSEToolCallDelta,
   MockServerOptions,
+  StreamingProfile,
   ToolCallMessage,
 } from "./types.js";

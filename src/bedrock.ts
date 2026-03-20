@@ -1,0 +1,388 @@
+/**
+ * AWS Bedrock Claude invoke endpoint support.
+ *
+ * Translates incoming POST /model/{modelId}/invoke requests (Bedrock Claude
+ * format) into the ChatCompletionRequest format used by the fixture router,
+ * and converts fixture responses back into the Anthropic Messages API
+ * non-streaming format (which Bedrock Claude SDKs expect as the response body).
+ */
+
+import type * as http from "node:http";
+import type {
+  ChatCompletionRequest,
+  ChatMessage,
+  Fixture,
+  ToolCall,
+  ToolDefinition,
+} from "./types.js";
+import {
+  generateMessageId,
+  generateToolUseId,
+  isTextResponse,
+  isToolCallResponse,
+  isErrorResponse,
+  flattenHeaders,
+} from "./helpers.js";
+import { matchFixture } from "./router.js";
+import { writeErrorResponse } from "./sse-writer.js";
+import type { Journal } from "./journal.js";
+import type { Logger } from "./logger.js";
+
+// ─── Bedrock Claude request types ────────────────────────────────────────────
+
+interface BedrockContentBlock {
+  type: string;
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+  tool_use_id?: string;
+  content?: string | BedrockContentBlock[];
+  is_error?: boolean;
+}
+
+interface BedrockMessage {
+  role: "user" | "assistant";
+  content: string | BedrockContentBlock[];
+}
+
+interface BedrockToolDef {
+  name: string;
+  description?: string;
+  input_schema?: object;
+}
+
+interface BedrockRequest {
+  anthropic_version?: string;
+  messages: BedrockMessage[];
+  system?: string | BedrockContentBlock[];
+  tools?: BedrockToolDef[];
+  tool_choice?: unknown;
+  max_tokens: number;
+  temperature?: number;
+  [key: string]: unknown;
+}
+
+// ─── Input conversion: Bedrock → ChatCompletionRequest ──────────────────────
+
+function extractTextContent(content: string | BedrockContentBlock[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text ?? "")
+    .join("");
+}
+
+export function bedrockToCompletionRequest(
+  req: BedrockRequest,
+  modelId: string,
+): ChatCompletionRequest {
+  const messages: ChatMessage[] = [];
+
+  // system field → system message
+  if (req.system) {
+    const systemText =
+      typeof req.system === "string"
+        ? req.system
+        : req.system
+            .filter((b) => b.type === "text")
+            .map((b) => b.text ?? "")
+            .join("");
+    if (systemText) {
+      messages.push({ role: "system", content: systemText });
+    }
+  }
+
+  for (const msg of req.messages) {
+    if (msg.role === "user") {
+      // Check for tool_result blocks
+      if (typeof msg.content !== "string" && Array.isArray(msg.content)) {
+        const toolResults = msg.content.filter((b) => b.type === "tool_result");
+        const textBlocks = msg.content.filter((b) => b.type === "text");
+
+        if (toolResults.length > 0) {
+          for (const tr of toolResults) {
+            const resultContent =
+              typeof tr.content === "string"
+                ? tr.content
+                : Array.isArray(tr.content)
+                  ? tr.content
+                      .filter((b) => b.type === "text")
+                      .map((b) => b.text ?? "")
+                      .join("")
+                  : "";
+            messages.push({
+              role: "tool",
+              content: resultContent,
+              tool_call_id: tr.tool_use_id,
+            });
+          }
+          if (textBlocks.length > 0) {
+            messages.push({
+              role: "user",
+              content: textBlocks.map((b) => b.text ?? "").join(""),
+            });
+          }
+          continue;
+        }
+      }
+      messages.push({
+        role: "user",
+        content: extractTextContent(msg.content),
+      });
+    } else if (msg.role === "assistant") {
+      if (typeof msg.content === "string") {
+        messages.push({ role: "assistant", content: msg.content });
+      } else if (Array.isArray(msg.content)) {
+        const toolUseBlocks = msg.content.filter((b) => b.type === "tool_use");
+        const textContent = extractTextContent(msg.content);
+
+        if (toolUseBlocks.length > 0) {
+          messages.push({
+            role: "assistant",
+            content: textContent || null,
+            tool_calls: toolUseBlocks.map((b) => ({
+              id: b.id ?? generateToolUseId(),
+              type: "function" as const,
+              function: {
+                name: b.name ?? "",
+                arguments: typeof b.input === "string" ? b.input : JSON.stringify(b.input ?? {}),
+              },
+            })),
+          });
+        } else {
+          messages.push({ role: "assistant", content: textContent || null });
+        }
+      } else {
+        messages.push({ role: "assistant", content: null });
+      }
+    }
+  }
+
+  // Convert tools
+  let tools: ToolDefinition[] | undefined;
+  if (req.tools && req.tools.length > 0) {
+    tools = req.tools.map((t) => ({
+      type: "function" as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.input_schema,
+      },
+    }));
+  }
+
+  return {
+    model: modelId,
+    messages,
+    stream: false,
+    temperature: req.temperature,
+    tools,
+  };
+}
+
+// ─── Response builders ──────────────────────────────────────────────────────
+
+function buildBedrockTextResponse(content: string, model: string): object {
+  return {
+    id: generateMessageId(),
+    type: "message",
+    role: "assistant",
+    content: [{ type: "text", text: content }],
+    model,
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: { input_tokens: 0, output_tokens: 0 },
+  };
+}
+
+function buildBedrockToolCallResponse(
+  toolCalls: ToolCall[],
+  model: string,
+  logger: Logger,
+): object {
+  return {
+    id: generateMessageId(),
+    type: "message",
+    role: "assistant",
+    content: toolCalls.map((tc) => {
+      let argsObj: unknown;
+      try {
+        argsObj = JSON.parse(tc.arguments || "{}");
+      } catch {
+        logger.warn(
+          `Malformed JSON in fixture tool call arguments for "${tc.name}": ${tc.arguments}`,
+        );
+        argsObj = {};
+      }
+      return {
+        type: "tool_use",
+        id: tc.id || generateToolUseId(),
+        name: tc.name,
+        input: argsObj,
+      };
+    }),
+    model,
+    stop_reason: "tool_use",
+    stop_sequence: null,
+    usage: { input_tokens: 0, output_tokens: 0 },
+  };
+}
+
+// ─── Request handler ────────────────────────────────────────────────────────
+
+export async function handleBedrock(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  raw: string,
+  modelId: string,
+  fixtures: Fixture[],
+  journal: Journal,
+  defaults: { latency: number; chunkSize: number; logger: Logger },
+  setCorsHeaders: (res: http.ServerResponse) => void,
+): Promise<void> {
+  const { logger } = defaults;
+  setCorsHeaders(res);
+
+  const urlPath = req.url ?? `/model/${modelId}/invoke`;
+
+  let bedrockReq: BedrockRequest;
+  try {
+    bedrockReq = JSON.parse(raw) as BedrockRequest;
+  } catch {
+    journal.add({
+      method: req.method ?? "POST",
+      path: urlPath,
+      headers: flattenHeaders(req.headers),
+      body: {} as ChatCompletionRequest,
+      response: { status: 400, fixture: null },
+    });
+    writeErrorResponse(
+      res,
+      400,
+      JSON.stringify({
+        error: {
+          message: "Malformed JSON",
+          type: "invalid_request_error",
+        },
+      }),
+    );
+    return;
+  }
+
+  if (!bedrockReq.messages || !Array.isArray(bedrockReq.messages)) {
+    journal.add({
+      method: req.method ?? "POST",
+      path: urlPath,
+      headers: flattenHeaders(req.headers),
+      body: {} as ChatCompletionRequest,
+      response: { status: 400, fixture: null },
+    });
+    writeErrorResponse(
+      res,
+      400,
+      JSON.stringify({
+        error: {
+          message: "Invalid request: messages array is required",
+          type: "invalid_request_error",
+        },
+      }),
+    );
+    return;
+  }
+
+  // Convert to ChatCompletionRequest for fixture matching
+  const completionReq = bedrockToCompletionRequest(bedrockReq, modelId);
+
+  const fixture = matchFixture(fixtures, completionReq, journal.fixtureMatchCounts);
+
+  if (fixture) {
+    journal.incrementFixtureMatchCount(fixture, fixtures);
+  }
+
+  if (!fixture) {
+    journal.add({
+      method: req.method ?? "POST",
+      path: urlPath,
+      headers: flattenHeaders(req.headers),
+      body: completionReq,
+      response: { status: 404, fixture: null },
+    });
+    writeErrorResponse(
+      res,
+      404,
+      JSON.stringify({
+        error: {
+          message: "No fixture matched",
+          type: "invalid_request_error",
+        },
+      }),
+    );
+    return;
+  }
+
+  const response = fixture.response;
+
+  // Error response
+  if (isErrorResponse(response)) {
+    const status = response.status ?? 500;
+    journal.add({
+      method: req.method ?? "POST",
+      path: urlPath,
+      headers: flattenHeaders(req.headers),
+      body: completionReq,
+      response: { status, fixture },
+    });
+    writeErrorResponse(res, status, JSON.stringify(response));
+    return;
+  }
+
+  // Text response
+  if (isTextResponse(response)) {
+    journal.add({
+      method: req.method ?? "POST",
+      path: urlPath,
+      headers: flattenHeaders(req.headers),
+      body: completionReq,
+      response: { status: 200, fixture },
+    });
+    const body = buildBedrockTextResponse(response.content, completionReq.model);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(body));
+    return;
+  }
+
+  // Tool call response
+  if (isToolCallResponse(response)) {
+    journal.add({
+      method: req.method ?? "POST",
+      path: urlPath,
+      headers: flattenHeaders(req.headers),
+      body: completionReq,
+      response: { status: 200, fixture },
+    });
+    const body = buildBedrockToolCallResponse(response.toolCalls, completionReq.model, logger);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(body));
+    return;
+  }
+
+  // Unknown response type
+  journal.add({
+    method: req.method ?? "POST",
+    path: urlPath,
+    headers: flattenHeaders(req.headers),
+    body: completionReq,
+    response: { status: 500, fixture },
+  });
+  writeErrorResponse(
+    res,
+    500,
+    JSON.stringify({
+      error: {
+        message: "Fixture response did not match any known type",
+        type: "server_error",
+      },
+    }),
+  );
+}

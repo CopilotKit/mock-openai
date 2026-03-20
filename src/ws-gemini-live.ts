@@ -12,6 +12,7 @@ import { isTextResponse, isToolCallResponse, isErrorResponse } from "./helpers.j
 import { createInterruptionSignal } from "./interruption.js";
 import { delay } from "./sse-writer.js";
 import type { Journal } from "./journal.js";
+import type { Logger } from "./logger.js";
 import type { WebSocketConnection } from "./ws-framing.js";
 
 // ─── Gemini Live protocol types ─────────────────────────────────────────────
@@ -170,8 +171,9 @@ export function handleWebSocketGeminiLive(
   ws: WebSocketConnection,
   fixtures: Fixture[],
   journal: Journal,
-  defaults: { latency: number; chunkSize: number; model: string },
+  defaults: { latency: number; chunkSize: number; model: string; logger: Logger },
 ): void {
+  const { logger } = defaults;
   const session: SessionState = {
     setupDone: false,
     model: defaults.model,
@@ -184,7 +186,7 @@ export function handleWebSocketGeminiLive(
     pending = pending.then(() =>
       processMessage(raw, ws, fixtures, journal, defaults, session).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "Internal error";
-        console.error(`[LLMock] WebSocket Gemini Live error: ${msg}`);
+        logger.error(`WebSocket Gemini Live error: ${msg}`);
         try {
           ws.send(
             JSON.stringify({
@@ -204,7 +206,7 @@ async function processMessage(
   ws: WebSocketConnection,
   fixtures: Fixture[],
   journal: Journal,
-  defaults: { latency: number; chunkSize: number; model: string },
+  defaults: { latency: number; chunkSize: number; model: string; logger: Logger },
   session: SessionState,
 ): Promise<void> {
   let parsed: GeminiLiveMessage;
@@ -266,8 +268,12 @@ async function processMessage(
     tools: session.tools.length > 0 ? session.tools : undefined,
   };
 
-  const fixture = matchFixture(fixtures, completionReq);
+  const fixture = matchFixture(fixtures, completionReq, journal.fixtureMatchCounts);
   const path = WS_PATH;
+
+  if (fixture) {
+    journal.incrementFixtureMatchCount(fixture, fixtures);
+  }
 
   if (!fixture) {
     journal.add({
@@ -418,8 +424,8 @@ async function processMessage(
       try {
         argsObj = JSON.parse(tc.arguments || "{}") as Record<string, unknown>;
       } catch {
-        console.warn(
-          `[LLMock] Malformed JSON in fixture tool call arguments for "${tc.name}": ${tc.arguments}`,
+        defaults.logger.warn(
+          `Malformed JSON in fixture tool call arguments for "${tc.name}": ${tc.arguments}`,
         );
         argsObj = {};
       }

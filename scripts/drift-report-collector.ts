@@ -49,6 +49,7 @@ interface ProviderMapping {
   builderFile: string;
   builderFunctions: string[];
   typesFile: string | null;
+  sdkShapesFile?: string;
 }
 
 const OPENAI_CHAT_MAPPING: ProviderMapping = {
@@ -95,6 +96,13 @@ const GEMINI_MAPPING: ProviderMapping = {
   typesFile: null,
 };
 
+const OPENAI_EMBEDDINGS_MAPPING: ProviderMapping = {
+  builderFile: "src/helpers.ts",
+  builderFunctions: ["buildEmbeddingResponse", "generateDeterministicEmbedding"],
+  typesFile: null,
+  sdkShapesFile: "src/__tests__/drift/sdk-shapes.ts",
+};
+
 /**
  * Maps provider names (from drift test describe blocks) to source files
  * and builder function names. The function names are builder functions for
@@ -123,6 +131,7 @@ const PROVIDER_MAP: Record<string, ProviderMapping> = {
     builderFunctions: ["handleWebSocketGeminiLive"],
     typesFile: null,
   },
+  "OpenAI Embeddings": OPENAI_EMBEDDINGS_MAPPING,
 };
 
 const SDK_SHAPES_FILE = "src/__tests__/drift/sdk-shapes.ts";

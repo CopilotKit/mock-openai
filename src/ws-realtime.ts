@@ -18,6 +18,7 @@ import {
 import { createInterruptionSignal } from "./interruption.js";
 import { delay } from "./sse-writer.js";
 import type { Journal } from "./journal.js";
+import type { Logger } from "./logger.js";
 import type { WebSocketConnection } from "./ws-framing.js";
 
 // ─── Realtime protocol types ────────────────────────────────────────────────
@@ -62,6 +63,7 @@ interface RealtimeMessage {
 export function realtimeItemsToMessages(
   items: RealtimeItem[],
   instructions?: string,
+  logger?: Logger,
 ): ChatMessage[] {
   const messages: ChatMessage[] = [];
 
@@ -77,7 +79,7 @@ export function realtimeItemsToMessages(
       messages.push({ role, content: text });
     } else if (item.type === "function_call") {
       if (!item.name) {
-        console.warn("[LLMock] Realtime function_call item missing 'name'");
+        logger?.warn("Realtime function_call item missing 'name'");
       }
       messages.push({
         role: "assistant",
@@ -95,7 +97,7 @@ export function realtimeItemsToMessages(
       });
     } else if (item.type === "function_call_output") {
       if (!item.output) {
-        console.warn("[LLMock] Realtime function_call_output item missing 'output'");
+        logger?.warn("Realtime function_call_output item missing 'output'");
       }
       messages.push({
         role: "tool",
@@ -128,8 +130,9 @@ export function handleWebSocketRealtime(
   ws: WebSocketConnection,
   fixtures: Fixture[],
   journal: Journal,
-  defaults: { latency: number; chunkSize: number; model: string },
+  defaults: { latency: number; chunkSize: number; model: string; logger: Logger },
 ): void {
+  const { logger } = defaults;
   const sessionId = generateId("sess");
 
   const session: SessionConfig = {
@@ -156,7 +159,7 @@ export function handleWebSocketRealtime(
       processMessage(raw, ws, fixtures, journal, defaults, session, conversationItems).catch(
         (err: unknown) => {
           const msg = err instanceof Error ? err.message : "Internal error";
-          console.error(`[LLMock] WebSocket realtime error: ${msg}`);
+          logger.error(`WebSocket realtime error: ${msg}`);
           try {
             ws.send(buildErrorRealtimeEvent(msg, "server_error"));
           } catch {
@@ -173,7 +176,7 @@ async function processMessage(
   ws: WebSocketConnection,
   fixtures: Fixture[],
   journal: Journal,
-  defaults: { latency: number; chunkSize: number; model: string },
+  defaults: { latency: number; chunkSize: number; model: string; logger: Logger },
   session: SessionConfig,
   conversationItems: RealtimeItem[],
 ): Promise<void> {
@@ -243,20 +246,24 @@ async function handleResponseCreate(
   ws: WebSocketConnection,
   fixtures: Fixture[],
   journal: Journal,
-  defaults: { latency: number; chunkSize: number; model: string },
+  defaults: { latency: number; chunkSize: number; model: string; logger: Logger },
   session: SessionConfig,
   conversationItems: RealtimeItem[],
 ): Promise<void> {
   const instructions = session.instructions || undefined;
-  const messages = realtimeItemsToMessages(conversationItems, instructions);
+  const messages = realtimeItemsToMessages(conversationItems, instructions, defaults.logger);
 
   const completionReq: ChatCompletionRequest = {
     model: session.model,
     messages,
   };
 
-  const fixture = matchFixture(fixtures, completionReq);
+  const fixture = matchFixture(fixtures, completionReq, journal.fixtureMatchCounts);
   const responseId = generateId("resp");
+
+  if (fixture) {
+    journal.incrementFixtureMatchCount(fixture, fixtures);
+  }
 
   if (!fixture) {
     journal.add({
@@ -586,16 +593,9 @@ async function handleResponseCreate(
     );
 
     // Accumulate assistant tool calls into conversation for multi-turn
-    for (let tcIdx = 0; tcIdx < response.toolCalls.length; tcIdx++) {
-      const tc = response.toolCalls[tcIdx];
-      const callId = tc.id ?? generateToolCallId();
-      conversationItems.push({
-        type: "function_call",
-        id: generateId("item"),
-        call_id: callId,
-        name: tc.name,
-        arguments: tc.arguments,
-      });
+    // Reuse outputItems (which already have the correct call_id) to avoid generating divergent IDs
+    for (const item of outputItems) {
+      conversationItems.push(item as RealtimeItem);
     }
     return;
   }

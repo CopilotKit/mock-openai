@@ -28,6 +28,9 @@ export interface ChatCompletionRequest {
   max_tokens?: number;
   tools?: ToolDefinition[];
   tool_choice?: string | object;
+  response_format?: { type: string; [key: string]: unknown };
+  /** Embedding input text, set by the embeddings handler for fixture matching. */
+  embeddingInput?: string;
   [key: string]: unknown;
 }
 
@@ -40,10 +43,14 @@ export interface ToolDefinition {
 
 export interface FixtureMatch {
   userMessage?: string | RegExp;
+  inputText?: string | RegExp;
   toolCallId?: string;
   toolName?: string;
   model?: string | RegExp;
+  responseFormat?: string;
   predicate?: (req: ChatCompletionRequest) => boolean;
+  /** Which occurrence of this match to respond to (0-indexed). Undefined means match any. */
+  sequenceIndex?: number;
 }
 
 // Fixture response types
@@ -70,7 +77,19 @@ export interface ErrorResponse {
   status?: number;
 }
 
-export type FixtureResponse = TextResponse | ToolCallResponse | ErrorResponse;
+export interface EmbeddingResponse {
+  embedding: number[];
+}
+
+export type FixtureResponse = TextResponse | ToolCallResponse | ErrorResponse | EmbeddingResponse;
+
+// Streaming physics
+
+export interface StreamingProfile {
+  ttft?: number; // Time to first token (ms)
+  tps?: number; // Tokens per second
+  jitter?: number; // Random variance factor (0-1), default 0
+}
 
 // Fixture
 
@@ -81,6 +100,7 @@ export interface Fixture {
   chunkSize?: number;
   truncateAfterChunks?: number;
   disconnectAfterMs?: number;
+  streamingProfile?: StreamingProfile;
 }
 
 // Fixture file format (JSON on disk)
@@ -92,9 +112,12 @@ export interface FixtureFile {
 export interface FixtureFileEntry {
   match: {
     userMessage?: string;
+    inputText?: string;
     toolCallId?: string;
     toolName?: string;
     model?: string;
+    responseFormat?: string;
+    sequenceIndex?: number;
     // predicate not supported in JSON files
   };
   response: FixtureResponse;
@@ -102,6 +125,7 @@ export interface FixtureFileEntry {
   chunkSize?: number;
   truncateAfterChunks?: number;
   disconnectAfterMs?: number;
+  streamingProfile?: StreamingProfile;
 }
 
 // Request journal
@@ -181,6 +205,6 @@ export interface MockServerOptions {
   host?: string;
   latency?: number;
   chunkSize?: number;
-  /** Log verbosity. CLI default is "info"; programmatic default is undefined (silent). */
+  /** Log verbosity. CLI default is "info"; programmatic default (when omitted) is "silent". */
   logLevel?: "silent" | "info" | "debug";
 }
