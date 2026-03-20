@@ -12,7 +12,7 @@
 - Azure OpenAI: provider routing for `/openai/deployments/{id}/chat/completions` and `/openai/deployments/{id}/embeddings`
 - Health & models endpoints: `GET /health`, `GET /ready`, `GET /v1/models` (auto-populated from fixtures)
 - Docker & Helm: Dockerfile, Helm chart for Kubernetes deployment
-- Documentation website: full docs site at llmock.com with feature pages and competitive comparison matrix
+- Documentation website: full docs site at llmock.copilotkit.dev with feature pages and competitive comparison matrix
 - Automated drift remediation: `scripts/drift-report-collector.ts` and `scripts/fix-drift.ts` for CI-driven drift fixes
 - CI automation: competitive matrix update workflow, drift fix workflow
 - `FixtureOpts` and `EmbeddingFixtureOpts` type aliases exported for external consumers

@@ -72,18 +72,18 @@ MSW can't intercept any of those calls. llmock can — it's a real server on a r
 
 ## Features
 
-- **[Multi-provider support](https://llmock.com/compatible-providers.html)** — [OpenAI Chat Completions](https://llmock.com/chat-completions.html), [OpenAI Responses](https://llmock.com/responses-api.html), [Anthropic Claude](https://llmock.com/claude-messages.html), [Google Gemini](https://llmock.com/gemini.html), [AWS Bedrock](https://llmock.com/aws-bedrock.html), [Azure OpenAI](https://llmock.com/azure-openai.html)
-- **[Embeddings API](https://llmock.com/embeddings.html)** — OpenAI-compatible embedding responses with configurable dimensions
-- **[Structured output / JSON mode](https://llmock.com/structured-output.html)** — `response_format`, `json_schema`, and function calling
-- **[Sequential responses](https://llmock.com/sequential-responses.html)** — Stateful multi-turn fixtures that return different responses on each call
-- **[Streaming physics](https://llmock.com/streaming-physics.html)** — Configurable `ttft`, `tps`, and `jitter` for realistic timing
-- **[WebSocket APIs](https://llmock.com/websocket.html)** — OpenAI Responses WS, Realtime API, and Gemini Live
-- **[Error injection](https://llmock.com/error-injection.html)** — One-shot errors, rate limiting, and provider-specific error formats
-- **[Request journal](https://llmock.com/docs.html)** — Record, inspect, and assert on every request
-- **[Fixture validation](https://llmock.com/fixtures.html)** — Schema validation at load time with `--validate-on-load`
+- **[Multi-provider support](https://llmock.copilotkit.dev/compatible-providers.html)** — [OpenAI Chat Completions](https://llmock.copilotkit.dev/chat-completions.html), [OpenAI Responses](https://llmock.copilotkit.dev/responses-api.html), [Anthropic Claude](https://llmock.copilotkit.dev/claude-messages.html), [Google Gemini](https://llmock.copilotkit.dev/gemini.html), [AWS Bedrock](https://llmock.copilotkit.dev/aws-bedrock.html), [Azure OpenAI](https://llmock.copilotkit.dev/azure-openai.html)
+- **[Embeddings API](https://llmock.copilotkit.dev/embeddings.html)** — OpenAI-compatible embedding responses with configurable dimensions
+- **[Structured output / JSON mode](https://llmock.copilotkit.dev/structured-output.html)** — `response_format`, `json_schema`, and function calling
+- **[Sequential responses](https://llmock.copilotkit.dev/sequential-responses.html)** — Stateful multi-turn fixtures that return different responses on each call
+- **[Streaming physics](https://llmock.copilotkit.dev/streaming-physics.html)** — Configurable `ttft`, `tps`, and `jitter` for realistic timing
+- **[WebSocket APIs](https://llmock.copilotkit.dev/websocket.html)** — OpenAI Responses WS, Realtime API, and Gemini Live
+- **[Error injection](https://llmock.copilotkit.dev/error-injection.html)** — One-shot errors, rate limiting, and provider-specific error formats
+- **[Request journal](https://llmock.copilotkit.dev/docs.html)** — Record, inspect, and assert on every request
+- **[Fixture validation](https://llmock.copilotkit.dev/fixtures.html)** — Schema validation at load time with `--validate-on-load`
 - **CLI with hot-reload** — Standalone server with `--watch` for live fixture editing
-- **[Docker + Helm](https://llmock.com/docker.html)** — Container image and Helm chart for CI/CD pipelines
-- **[Drift detection](https://llmock.com/drift-detection.html)** — Daily CI runs against real APIs to catch response format changes
+- **[Docker + Helm](https://llmock.copilotkit.dev/docker.html)** — Container image and Helm chart for CI/CD pipelines
+- **[Drift detection](https://llmock.copilotkit.dev/drift-detection.html)** — Daily CI runs against real APIs to catch response format changes
 - **Claude Code integration** — `/write-fixtures` skill teaches your AI assistant how to write fixtures correctly
 
 ## CLI Quick Reference
@@ -119,7 +119,7 @@ llmock --latency 100 --chunk-size 5
 
 Full API reference, fixture format, E2E patterns, and provider-specific guides:
 
-**[llmock.com/docs.html](https://llmock.com/docs.html)**
+**[https://llmock.copilotkit.dev/docs.html](https://llmock.copilotkit.dev/docs.html)**
 
 ## Real-World Usage
 
