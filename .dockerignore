@@ -1,0 +1,15 @@
+node_modules
+.git
+src/__tests__
+docs
+.worktrees
+.github
+coverage
+*.md
+dist
+.claude
+.claude-plugin
+skills
+.husky
+.vscode
+.idea

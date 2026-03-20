@@ -1,0 +1,56 @@
+name: Update Competitive Matrix
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Weekly Monday 9am UTC
+  workflow_dispatch:
+
+concurrency:
+  group: competitive-matrix
+  cancel-in-progress: true
+
+jobs:
+  update-matrix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Update competitive matrix
+        run: npx tsx scripts/update-competitive-matrix.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet docs/index.html; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create PR
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="auto/competitive-matrix-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          git add docs/index.html
+          git commit -m "docs: update competitive matrix from latest competitor data"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "Update competitive matrix" \
+            --body "Automated weekly update based on competitor README analysis." \
+            --base main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
