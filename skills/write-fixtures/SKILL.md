@@ -431,7 +431,7 @@ llmock --strict -f ./fixtures
 ```
 
 - `--record` enables proxy-on-miss. Requires at least one `--provider-*` flag.
-- `--strict` returns a 404 error for unmatched requests instead of proxying, even if `--record` is set. Use this in CI to ensure all requests hit fixtures.
+- `--strict` returns a 503 error for unmatched requests instead of proxying, even if `--record` is set. Use this in CI to ensure all requests hit fixtures.
 - Provider flags: `--provider-openai`, `--provider-anthropic`, `--provider-gemini`, `--provider-vertexai`, `--provider-bedrock`, `--provider-azure`, `--provider-ollama`, `--provider-cohere`.
 
 ### How it works
@@ -441,7 +441,7 @@ llmock --strict -f ./fixtures
 3. **Auth headers are forwarded but NOT saved** — `Authorization`, `x-api-key`, and `api-key` headers are passed through to the upstream provider, but stripped from the recorded fixture.
 4. **Responses are saved as standard fixtures** — recorded files land in `{fixturePath}/recorded/` and use the same JSON format as hand-written fixtures. Nothing special about them.
 5. **Streaming responses are collapsed** — SSE streams are collapsed into a single text or tool-call response for the fixture. The original streaming format is preserved in the live proxy response.
-6. **Loud logging** — every proxy hit logs at `info` level so you can see exactly which requests are being forwarded.
+6. **Loud logging** — every proxy hit logs at `warn` level so you can see exactly which requests are being forwarded.
 
 ### Programmatic API
 

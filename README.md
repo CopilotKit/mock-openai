@@ -45,7 +45,7 @@ MSW can't intercept any of those calls. llmock can — it's a real server on a r
 **Use llmock when:**
 
 - Multiple processes need to hit the same mock (E2E tests, agent frameworks, microservices)
-- You want multi-provider SSE format out of the box (OpenAI, Claude, Gemini)
+- You want multi-provider SSE format out of the box (OpenAI, Claude, Gemini, Bedrock, Azure, Vertex AI, Ollama, Cohere)
 - You prefer defining fixtures as JSON files rather than code
 - You need a standalone CLI server
 
