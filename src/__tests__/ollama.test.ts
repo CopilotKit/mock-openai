@@ -1043,3 +1043,72 @@ describe("POST /api/chat (error fixture no explicit status)", () => {
     expect(body.error.message).toBe("Something went wrong");
   });
 });
+
+// ---------------------------------------------------------------------------
+// writeNDJSONStream with non-zero latency
+// ---------------------------------------------------------------------------
+
+describe("writeNDJSONStream with non-zero latency", () => {
+  it("delays between chunks when latency is set", async () => {
+    const chunks: string[] = [];
+    const timestamps: number[] = [];
+    const res = {
+      writableEnded: false,
+      setHeader: () => {},
+      write: (data: string) => {
+        chunks.push(data);
+        timestamps.push(Date.now());
+        return true;
+      },
+      end: () => {
+        (res as { writableEnded: boolean }).writableEnded = true;
+      },
+    } as unknown as http.ServerResponse;
+
+    const data = [
+      { model: "llama3", message: { content: "Hello" }, done: false },
+      { model: "llama3", message: { content: " world" }, done: false },
+      { model: "llama3", message: { content: "" }, done: true },
+    ];
+
+    const start = Date.now();
+    const completed = await writeNDJSONStream(res, data, { latency: 30 });
+    const elapsed = Date.now() - start;
+
+    expect(completed).toBe(true);
+    expect(chunks).toHaveLength(3);
+    // With 30ms latency per chunk and 3 chunks, total should be >= 60ms
+    // (first chunk has 0 delay with default profile, subsequent chunks have latency)
+    expect(elapsed).toBeGreaterThanOrEqual(50);
+  });
+
+  it("all chunks are valid NDJSON with non-zero latency", async () => {
+    const chunks: string[] = [];
+    const res = {
+      writableEnded: false,
+      setHeader: () => {},
+      write: (data: string) => {
+        chunks.push(data);
+        return true;
+      },
+      end: () => {
+        (res as { writableEnded: boolean }).writableEnded = true;
+      },
+    } as unknown as http.ServerResponse;
+
+    const data = [
+      { model: "llama3", done: false, message: { content: "a" } },
+      { model: "llama3", done: true, message: { content: "" } },
+    ];
+
+    const completed = await writeNDJSONStream(res, data, { latency: 10 });
+
+    expect(completed).toBe(true);
+    expect(chunks).toHaveLength(2);
+    // Each chunk should be valid JSON followed by newline
+    for (const chunk of chunks) {
+      expect(chunk.endsWith("\n")).toBe(true);
+      expect(() => JSON.parse(chunk.trim())).not.toThrow();
+    }
+  });
+});

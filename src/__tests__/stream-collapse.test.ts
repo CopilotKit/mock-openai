@@ -4,7 +4,7 @@ import {
   collapseAnthropicSSE,
   collapseGeminiSSE,
   collapseOllamaNDJSON,
-  collapseCohereSS,
+  collapseCohereSSE,
   collapseBedrockEventStream,
   collapseStreamingResponse,
 } from "../stream-collapse.js";
@@ -448,7 +448,7 @@ describe("collapseOllamaNDJSON", () => {
 // 5. Cohere SSE
 // ---------------------------------------------------------------------------
 
-describe("collapseCohereSS", () => {
+describe("collapseCohereSSE", () => {
   it("collapses text content from content-delta events", () => {
     const body = [
       `event: message-start`,
@@ -465,7 +465,7 @@ describe("collapseCohereSS", () => {
       "",
     ].join("\n");
 
-    const result = collapseCohereSS(body);
+    const result = collapseCohereSSE(body);
     expect(result.content).toBe("Hello world");
     expect(result.toolCalls).toBeUndefined();
   });
@@ -509,7 +509,7 @@ describe("collapseCohereSS", () => {
       "",
     ].join("\n");
 
-    const result = collapseCohereSS(body);
+    const result = collapseCohereSSE(body);
     expect(result.toolCalls).toBeDefined();
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls![0].name).toBe("get_weather");
@@ -752,7 +752,7 @@ describe("collapseOllamaNDJSON droppedChunks", () => {
   });
 });
 
-describe("collapseCohereSS droppedChunks", () => {
+describe("collapseCohereSSE droppedChunks", () => {
   it("counts droppedChunks for malformed JSON events mixed with valid ones", () => {
     const body = [
       `event: content-delta`,
@@ -766,7 +766,7 @@ describe("collapseCohereSS droppedChunks", () => {
       "",
     ].join("\n");
 
-    const result = collapseCohereSS(body);
+    const result = collapseCohereSSE(body);
     expect(result.content).toBe("XY");
     expect(result.droppedChunks).toBe(1);
   });
@@ -868,7 +868,7 @@ describe("collapseAnthropicSSE multiple tool calls", () => {
   });
 });
 
-describe("collapseCohereSS multiple tool calls", () => {
+describe("collapseCohereSSE multiple tool calls", () => {
   it("collapses 2 tool-call-start events at different indices", () => {
     const body = [
       `event: message-start`,
@@ -923,7 +923,7 @@ describe("collapseCohereSS multiple tool calls", () => {
       "",
     ].join("\n");
 
-    const result = collapseCohereSS(body);
+    const result = collapseCohereSSE(body);
     expect(result.toolCalls).toBeDefined();
     expect(result.toolCalls).toHaveLength(2);
     expect(result.toolCalls![0].name).toBe("get_weather");
@@ -1190,10 +1190,10 @@ describe("collapseGeminiSSE defensive branches", () => {
 // Defensive branch coverage — Cohere
 // ---------------------------------------------------------------------------
 
-describe("collapseCohereSS defensive branches", () => {
+describe("collapseCohereSSE defensive branches", () => {
   it("SSE block with no data: line is skipped", () => {
     const body = ["event: content-delta", ""].join("\n");
-    const result = collapseCohereSS(body);
+    const result = collapseCohereSSE(body);
     expect(result.content).toBe("");
   });
 
@@ -1222,7 +1222,7 @@ describe("collapseCohereSS defensive branches", () => {
       "",
     ].join("\n");
 
-    const result = collapseCohereSS(body);
+    const result = collapseCohereSSE(body);
     expect(result.toolCalls).toBeDefined();
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls![0].name).toBe("fn");
@@ -1240,7 +1240,7 @@ describe("collapseCohereSS defensive branches", () => {
       "",
     ].join("\n");
 
-    const result = collapseCohereSS(body);
+    const result = collapseCohereSSE(body);
     expect(result.content).toBe("");
     expect(result.toolCalls).toBeUndefined();
   });
@@ -1274,7 +1274,7 @@ describe("collapseCohereSS defensive branches", () => {
       "",
     ].join("\n");
 
-    const result = collapseCohereSS(body);
+    const result = collapseCohereSSE(body);
     expect(result.toolCalls).toBeDefined();
     expect(result.toolCalls).toHaveLength(1);
     expect(result.droppedChunks).toBe(1);
@@ -1422,8 +1422,131 @@ describe("empty input collapse", () => {
     expect(result.content).toBe("");
   });
 
-  it('collapseCohereSS("") returns { content: "" }', () => {
-    const result = collapseCohereSS("");
+  it('collapseCohereSSE("") returns { content: "" }', () => {
+    const result = collapseCohereSSE("");
     expect(result.content).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// collapseOllamaNDJSON with tool_calls in stream chunks
+// ---------------------------------------------------------------------------
+
+describe("collapseOllamaNDJSON with tool_calls", () => {
+  it("extracts tool_calls from /api/chat chunks", () => {
+    const body = [
+      JSON.stringify({
+        model: "llama3",
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              function: {
+                name: "get_weather",
+                arguments: { city: "SF" },
+              },
+            },
+          ],
+        },
+        done: false,
+      }),
+      JSON.stringify({
+        model: "llama3",
+        message: { role: "assistant", content: "" },
+        done: true,
+      }),
+    ].join("\n");
+
+    const result = collapseOllamaNDJSON(body);
+    // toolCalls takes priority over content when present
+    expect(result.toolCalls).toBeDefined();
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls![0].name).toBe("get_weather");
+    expect(result.toolCalls![0].arguments).toBe('{"city":"SF"}');
+    expect(result.content).toBeUndefined();
+  });
+
+  it("returns toolCalls (not content) when both tool_calls and text are present", () => {
+    const body = [
+      JSON.stringify({
+        model: "llama3",
+        message: {
+          role: "assistant",
+          content: "Let me check ",
+          tool_calls: [
+            {
+              function: {
+                name: "get_weather",
+                arguments: { city: "SF" },
+              },
+            },
+          ],
+        },
+        done: false,
+      }),
+      JSON.stringify({
+        model: "llama3",
+        message: { role: "assistant", content: "the weather." },
+        done: true,
+      }),
+    ].join("\n");
+
+    const result = collapseOllamaNDJSON(body);
+    // When toolCalls are present, they take priority over content
+    expect(result.toolCalls).toBeDefined();
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls![0].name).toBe("get_weather");
+    expect(result.content).toBeUndefined();
+  });
+
+  it("extracts multiple tool_calls across chunks", () => {
+    const body = [
+      JSON.stringify({
+        model: "llama3",
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              function: {
+                name: "get_weather",
+                arguments: '{"city":"SF"}',
+              },
+            },
+          ],
+        },
+        done: false,
+      }),
+      JSON.stringify({
+        model: "llama3",
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              function: {
+                name: "get_time",
+                arguments: '{"tz":"PST"}',
+              },
+            },
+          ],
+        },
+        done: false,
+      }),
+      JSON.stringify({
+        model: "llama3",
+        message: { role: "assistant", content: "" },
+        done: true,
+      }),
+    ].join("\n");
+
+    const result = collapseOllamaNDJSON(body);
+    expect(result.toolCalls).toBeDefined();
+    expect(result.toolCalls).toHaveLength(2);
+    expect(result.toolCalls![0].name).toBe("get_weather");
+    expect(result.toolCalls![0].arguments).toBe('{"city":"SF"}');
+    expect(result.toolCalls![1].name).toBe("get_time");
+    expect(result.toolCalls![1].arguments).toBe('{"tz":"PST"}');
   });
 });

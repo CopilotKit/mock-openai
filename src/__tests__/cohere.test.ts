@@ -930,3 +930,67 @@ describe("POST /v2/chat (journal)", () => {
     expect(entry!.body.model).toBe("command-r-plus");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Streaming tool call with explicit fixture id
+// ---------------------------------------------------------------------------
+
+describe("POST /v2/chat (streaming tool call with fixture-provided id)", () => {
+  const toolFixtureWithId: Fixture = {
+    match: { userMessage: "lookup" },
+    response: {
+      toolCalls: [
+        {
+          name: "search_db",
+          arguments: '{"query":"cats"}',
+          id: "call_fixture_custom_123",
+        },
+      ],
+    },
+  };
+
+  it("preserves fixture-provided tool call id in streaming events", async () => {
+    instance = await createServer([toolFixtureWithId]);
+    const res = await post(`${instance.url}/v2/chat`, {
+      model: "command-r-plus",
+      messages: [{ role: "user", content: "lookup" }],
+      stream: true,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("text/event-stream");
+
+    const events = parseSSEEvents(res.body);
+
+    // tool-call-start should carry the fixture-provided id
+    const tcStart = events.find((e) => e.event === "tool-call-start");
+    expect(tcStart).toBeDefined();
+    const tcStartDelta = tcStart!.data.delta as Record<string, unknown>;
+    const tcStartMsg = tcStartDelta.message as Record<string, unknown>;
+    const tcStartCalls = tcStartMsg.tool_calls as Record<string, unknown>;
+    expect(tcStartCalls.id).toBe("call_fixture_custom_123");
+    expect(tcStartCalls.type).toBe("function");
+    const tcStartFn = tcStartCalls.function as Record<string, unknown>;
+    expect(tcStartFn.name).toBe("search_db");
+
+    // tool-call-delta(s) should accumulate to the full arguments
+    const tcDeltas = events.filter((e) => e.event === "tool-call-delta");
+    expect(tcDeltas.length).toBeGreaterThanOrEqual(1);
+    const argsAccum = tcDeltas
+      .map((e) => {
+        const delta = e.data.delta as Record<string, unknown>;
+        const msg = delta.message as Record<string, unknown>;
+        const calls = msg.tool_calls as Record<string, unknown>;
+        const fn = calls.function as Record<string, unknown>;
+        return fn.arguments as string;
+      })
+      .join("");
+    expect(argsAccum).toBe('{"query":"cats"}');
+
+    // message-end with TOOL_CALL
+    const msgEnd = events.find((e) => e.event === "message-end");
+    expect(msgEnd).toBeDefined();
+    const endDelta = msgEnd!.data.delta as Record<string, unknown>;
+    expect(endDelta.finish_reason).toBe("TOOL_CALL");
+  });
+});
