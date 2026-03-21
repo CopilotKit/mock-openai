@@ -395,10 +395,16 @@ export async function createServer(
     latency: serverOptions.latency ?? 0,
     chunkSize: Math.max(1, serverOptions.chunkSize ?? DEFAULT_CHUNK_SIZE),
     logger,
-    chaos: options?.chaos,
+    get chaos() {
+      return serverOptions.chaos;
+    },
     registry,
-    strict: options?.strict,
-    record: options?.record,
+    get record() {
+      return serverOptions.record;
+    },
+    get strict() {
+      return serverOptions.strict;
+    },
   };
 
   const journal = new Journal();

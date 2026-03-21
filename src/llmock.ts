@@ -159,13 +159,11 @@ export class LLMock {
 
   setChaos(config: ChaosConfig): this {
     this.options.chaos = config;
-    if (this.serverInstance) this.serverInstance.defaults.chaos = config;
     return this;
   }
 
   clearChaos(): this {
     delete this.options.chaos;
-    if (this.serverInstance) delete this.serverInstance.defaults.chaos;
     return this;
   }
 
@@ -173,13 +171,11 @@ export class LLMock {
 
   enableRecording(config: RecordConfig): this {
     this.options.record = config;
-    if (this.serverInstance) this.serverInstance.defaults.record = config;
     return this;
   }
 
   disableRecording(): this {
     delete this.options.record;
-    if (this.serverInstance) delete this.serverInstance.defaults.record;
     return this;
   }
 
