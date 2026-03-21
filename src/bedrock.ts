@@ -262,7 +262,7 @@ export async function handleBedrock(
       method: req.method ?? "POST",
       path: urlPath,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -283,7 +283,7 @@ export async function handleBedrock(
       method: req.method ?? "POST",
       path: urlPath,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -579,7 +579,7 @@ export async function handleBedrockStream(
       method: req.method ?? "POST",
       path: urlPath,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -600,7 +600,7 @@ export async function handleBedrockStream(
       method: req.method ?? "POST",
       path: urlPath,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(

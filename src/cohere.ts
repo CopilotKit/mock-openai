@@ -403,7 +403,7 @@ export async function handleCohere(
       method: req.method ?? "POST",
       path: req.url ?? "/v2/chat",
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -425,7 +425,7 @@ export async function handleCohere(
       method: req.method ?? "POST",
       path: req.url ?? "/v2/chat",
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -446,7 +446,7 @@ export async function handleCohere(
       method: req.method ?? "POST",
       path: req.url ?? "/v2/chat",
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(

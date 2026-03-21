@@ -224,7 +224,7 @@ export async function handleConverse(
       method: req.method ?? "POST",
       path: urlPath,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -245,7 +245,7 @@ export async function handleConverse(
       method: req.method ?? "POST",
       path: urlPath,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -426,7 +426,7 @@ export async function handleConverseStream(
       method: req.method ?? "POST",
       path: urlPath,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -447,7 +447,7 @@ export async function handleConverseStream(
       method: req.method ?? "POST",
       path: urlPath,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(

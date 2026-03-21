@@ -157,5 +157,10 @@ export function applyChaos(
       res.destroy();
       return true;
     }
+    default: {
+      const _exhaustive: never = action;
+      void _exhaustive;
+      return false;
+    }
   }
 }

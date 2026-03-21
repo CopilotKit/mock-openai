@@ -12,6 +12,7 @@ import type {
   ChatMessage,
   Fixture,
   HandlerDefaults,
+  RecordProviderKey,
   StreamingProfile,
   ToolCall,
   ToolDefinition,
@@ -381,7 +382,7 @@ export async function handleGemini(
   journal: Journal,
   defaults: HandlerDefaults,
   setCorsHeaders: (res: http.ServerResponse) => void,
-  providerKey: string = "gemini",
+  providerKey: RecordProviderKey = "gemini",
 ): Promise<void> {
   const { logger } = defaults;
   setCorsHeaders(res);
@@ -394,7 +395,7 @@ export async function handleGemini(
       method: req.method ?? "POST",
       path: req.url ?? `/v1beta/models/${model}:generateContent`,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(

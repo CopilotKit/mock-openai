@@ -445,7 +445,7 @@ export async function handleMessages(
       method: req.method ?? "POST",
       path: req.url ?? "/v1/messages",
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(

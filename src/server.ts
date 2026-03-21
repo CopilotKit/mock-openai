@@ -4,6 +4,7 @@ import type {
   ChatCompletionRequest,
   HandlerDefaults,
   MockServerOptions,
+  RecordProviderKey,
 } from "./types.js";
 import { Journal } from "./journal.js";
 import { matchFixture } from "./router.js";
@@ -115,7 +116,7 @@ async function handleCompletions(
   journal: Journal,
   defaults: HandlerDefaults,
   modelFallback?: string,
-  providerKey?: string,
+  providerKey?: RecordProviderKey,
 ): Promise<void> {
   setCorsHeaders(res);
 
@@ -129,7 +130,7 @@ async function handleCompletions(
       method: req.method ?? "POST",
       path: req.url ?? COMPLETIONS_PATH,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 500, fixture: null },
     });
     writeErrorResponse(
@@ -158,7 +159,7 @@ async function handleCompletions(
       method: req.method ?? "POST",
       path: req.url ?? COMPLETIONS_PATH,
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(
@@ -416,20 +417,26 @@ export async function createServer(
     if (registry) {
       const rawPathname = pathname;
       res.on("finish", () => {
-        const normalizedPath = normalizePathLabel(rawPathname);
-        const method = req.method ?? "UNKNOWN";
-        const status = String(res.statusCode);
-        registry.incrementCounter("llmock_requests_total", {
-          method,
-          path: normalizedPath,
-          status,
-        });
-        const elapsed = Number(process.hrtime.bigint() - startTime) / 1e9;
-        registry.observeHistogram(
-          "llmock_request_duration_seconds",
-          { method, path: normalizedPath },
-          elapsed,
-        );
+        try {
+          const normalizedPath = normalizePathLabel(rawPathname);
+          const method = req.method ?? "UNKNOWN";
+          const status = String(res.statusCode);
+          registry.incrementCounter("llmock_requests_total", {
+            method,
+            path: normalizedPath,
+            status,
+          });
+          const elapsed = Number(process.hrtime.bigint() - startTime) / 1e9;
+          registry.observeHistogram(
+            "llmock_request_duration_seconds",
+            { method, path: normalizedPath },
+            elapsed,
+          );
+        } catch (err) {
+          logger.debug(
+            `Metrics instrumentation error: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       });
     }
 
@@ -920,7 +927,7 @@ export async function createServer(
       return;
     }
 
-    const completionsProvider = azureDeploymentId ? "azure" : "openai";
+    const completionsProvider: RecordProviderKey = azureDeploymentId ? "azure" : "openai";
     handleCompletions(
       req,
       res,

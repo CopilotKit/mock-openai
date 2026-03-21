@@ -53,7 +53,7 @@ export async function handleEmbeddings(
       method: req.method ?? "POST",
       path: req.url ?? "/v1/embeddings",
       headers: flattenHeaders(req.headers),
-      body: {} as ChatCompletionRequest,
+      body: null,
       response: { status: 400, fixture: null },
     });
     writeErrorResponse(

@@ -116,10 +116,7 @@ export interface Fixture {
 }
 
 export type FixtureOpts = Omit<Fixture, "match" | "response">;
-export type EmbeddingFixtureOpts = Pick<
-  FixtureOpts,
-  "latency" | "chunkSize" | "streamingProfile" | "chaos"
->;
+export type EmbeddingFixtureOpts = Pick<FixtureOpts, "latency" | "chaos">;
 
 // Fixture file format (JSON on disk)
 
@@ -155,7 +152,7 @@ export interface JournalEntry {
   method: string;
   path: string;
   headers: Record<string, string>;
-  body: ChatCompletionRequest;
+  body: ChatCompletionRequest | null;
   response: {
     status: number;
     fixture: Fixture | null;

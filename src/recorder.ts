@@ -8,6 +8,7 @@ import type {
   Fixture,
   FixtureResponse,
   RecordConfig,
+  RecordProviderKey,
   ToolCall,
 } from "./types.js";
 import { getLastMessageByRole, getTextContent } from "./router.js";
@@ -27,7 +28,7 @@ export async function proxyAndRecord(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   request: ChatCompletionRequest,
-  providerKey: string,
+  providerKey: RecordProviderKey,
   pathname: string,
   fixtures: Fixture[],
   defaults: { record?: RecordConfig; logger: Logger },
@@ -36,7 +37,7 @@ export async function proxyAndRecord(
   const record = defaults.record;
   if (!record) return false;
 
-  const providers = record.providers as Record<string, string | undefined>;
+  const providers = record.providers;
   const upstreamUrl = providers[providerKey];
 
   if (!upstreamUrl) {
@@ -62,9 +63,9 @@ export async function proxyAndRecord(
 
   defaults.logger.warn(`NO FIXTURE MATCH — proxying to ${upstreamUrl}${pathname}`);
 
-  // Forward relevant headers, strip x-llmock-* headers
+  // Forward only safe headers — auth and content negotiation
   const forwardHeaders: Record<string, string> = {};
-  const headersToForward = ["authorization", "x-api-key", "content-type", "accept"];
+  const headersToForward = ["authorization", "x-api-key", "api-key", "content-type", "accept"];
   for (const name of headersToForward) {
     const val = req.headers[name];
     if (val !== undefined) {
@@ -113,6 +114,9 @@ export async function proxyAndRecord(
   if (collapsed) {
     // Streaming response — use collapsed result
     defaults.logger.warn(`Streaming response detected (${ctString}) — collapsing to fixture`);
+    if (collapsed.truncated) {
+      defaults.logger.warn("Bedrock EventStream: CRC mismatch — response may be truncated");
+    }
     if (collapsed.droppedChunks && collapsed.droppedChunks > 0) {
       defaults.logger.warn(`${collapsed.droppedChunks} chunk(s) dropped during stream collapse`);
     }
